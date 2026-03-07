@@ -1,59 +1,109 @@
 import streamlit as st
 import requests
+from datetime import datetime
 
 API_URL = "http://localhost:8000"
 
-# เปลี่ยนเลย์เอาต์เป็น 'centered' เพื่อให้ดูแคบลง คล้ายหน้าจอมือถือมากขึ้นเมื่อเปิดบนคอม
-st.set_page_config(page_title="ผู้ช่วยประจำตัว", layout="centered")
+# ตั้งค่าหน้าจอให้เหมาะกับมือถือ
+st.set_page_config(page_title="HMS Assistant", layout="centered")
 
 # ---------------------------
-# CSS STYLE (สไตล์ LINE App)
+# 🎨 HMS UI v2 - Premium Mobile Style
 # ---------------------------
 st.markdown(
     """
     <style>
-    /* ปรับขนาดฟอนต์ให้ใหญ่ อ่านง่ายเต็มตา */
-    html, body, [class*="css"]  {
-        font-size: 22px !important;
+    .main .block-container { max-width: 420px; padding-top: 2rem; }
+    
+    /* สไตล์ Card ใหม่แบบพรีเมียม */
+    .visit-card {
+        background: white;
+        border-radius: 24px;
+        padding: 24px;
+        margin-bottom: 20px;
+        box-shadow: 0 10px 25px rgba(0,0,0,0.04);
+        border: 1px solid #F0F0F5;
+        transition: all 0.3s ease;
     }
     
-    /* แต่งปุ่มให้เป็นสีเขียวแบบ LINE และปุ่มใหญ่กดง่าย */
-    div.stButton > button:first-child {
-        background-color: #00B900;
-        color: white;
-        border-radius: 15px;
-        padding: 10px 20px;
-        font-size: 22px !important;
-        font-weight: bold;
-        border: none;
-        box-shadow: 0px 4px 6px rgba(0,0,0,0.1);
+    .card-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; }
+    .card-date { color: #8E8E93; font-size: 13px; display: flex; align-items: center; gap: 4px; }
+    
+    .card-symptom { 
+        color: #1C1C1E; 
+        font-size: 22px; 
+        font-weight: 700; 
+        line-height: 1.2;
+        margin-bottom: 15px; 
     }
-    div.stButton > button:first-child:hover {
-        background-color: #008B00;
-        color: white;
+    
+    .doctor-info {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        background: #F8F9FF;
+        padding: 8px 12px;
+        border-radius: 12px;
+        color: #007AFF;
+        font-size: 15px;
+        font-weight: 500;
+        margin-bottom: 15px;
     }
 
-    /* การ์ด Pinned Message ด้านบนแชท */
-    .pinned-message {
-        background-color: #E6F2EB;
-        border-left: 6px solid #00B900;
-        padding: 15px;
-        border-radius: 10px;
-        margin-bottom: 10px;
+    /* ปุ่มปรึกษา AI แบบใหม่ใน Card */
+    .action-area {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        border-top: 1px solid #F2F2F7;
+        padding-top: 15px;
+        color: #007AFF;
+        font-weight: 600;
+        font-size: 15px;
+    }
+
+    /* ซ่อนปุ่ม Streamlit ให้แนบไปกับ Card */
+    div.stButton > button {
+        border: 2px solid #007AFF !important;
+        background-color: transparent !important;
+        color: #007AFF !important;
+        border-radius: 12px !important;
+        font-weight: 600 !important;
+        transition: all 0.2s;
+    }
+    div.stButton > button:hover {
+        background-color: #007AFF !important;
+        color: white !important;
     }
     
-    .system-event {
-        text-align: center;
-        margin: 25px 0;
+    .logo-container {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        margin-bottom: 20px;
+        padding-top: 10px;
     }
     
-    .system-event span {
-        background-color: #8c969f;
-        color: white;
-        font-size: 18px;
-        padding: 6px 18px;
-        border-radius: 20px;
-        display: inline-block;
+    .logo-img {
+        width: 100px;
+        height: 100px;
+        object-fit: contain;
+        /* เพิ่มเงาฟุ้งๆ ให้โลโก้ดูพรีเมียม */
+        filter: drop-shadow(0 10px 15px rgba(0, 122, 255, 0.2));
+        transition: transform 0.3s ease;
+    }
+    
+    .logo-img:hover {
+        transform: scale(1.05);
+    }
+
+    .brand-name {
+        font-size: 28px;
+        font-weight: 800;
+        color: #1C1C1E;
+        margin-top: 10px;
+        letter-spacing: -0.5px;
     }
     
     </style>
@@ -66,239 +116,110 @@ st.markdown(
 # ---------------------------
 def get_visits():
     try:
-        response = requests.get(f"{API_URL}/visits")
+        response = requests.get(f"{API_URL}/visits", timeout=5)
         return response.json()
     except:
-        return "ขณะนี้ยังไม่มีประวัติรายการพบแพทย์ค่ะ"
+        return "ไม่สามารถเชื่อมต่อระบบได้ค่ะ"
 
 def send_question(visit_id, question):
     try:
-        response = requests.post(
-            f"{API_URL}/chat",
-            json={"visit_id": visit_id, "question": question}
-        )
-        return response.json().get("answer", "ขออภัยค่ะ ระบบขัดข้องนิดหน่อย")
+        response = requests.post(f"{API_URL}/chat", json={"visit_id": visit_id, "question": question}, timeout=10)
+        return response.json().get("answer", "ขออภัยค่ะ ระบบขัดข้อง")
     except:
-        return "คุณหมอจำลองตอบว่า: ตอนนี้ระบบหลังบ้านยังไม่เชื่อมต่อจ้า"
+        return "ระบบหลังบ้านปิดอยู่ค่ะ"
 
 # ---------------------------
-# SESSION STATE MANAGEMENT
+# SESSION STATE
 # ---------------------------
-if "selected_visit" not in st.session_state:
-    st.session_state.selected_visit = None
-if "messages" not in st.session_state:
-    st.session_state.messages = []
+if "selected_visit" not in st.session_state: st.session_state.selected_visit = None
+if "messages" not in st.session_state: st.session_state.messages = []
 
 # ---------------------------
-# PAGE 1: หน้าหลัก
+# PAGE 1: ส่วนแสดงผล Card แบบใหม่
+# ---------------------------
+# ---------------------------
+# PAGE 1: ส่วนแสดงผล Logo และ Card
 # ---------------------------
 if st.session_state.selected_visit is None:
-    st.markdown("<h2>🏥 ประวัติการรักษา</h2>", unsafe_allow_html=True)
-    st.caption("เลือกรอบที่ไปหาหมอเพื่อดูรายละเอียดได้เลยครับ")
-
-    raw_data = get_visits()
-    
-    # ตรวจสอบว่าเป็น List หรือไม่ (ถ้าไม่ใช่ เช่น เป็นข้อความ Error ให้กลายเป็น List ว่าง)
-    if isinstance(raw_data, list):
-        # กรองเอาเฉพาะที่เป็น Dictionary จริงๆ และมีคีย์ที่จำเป็น
-        visits = [v for v in raw_data if isinstance(v, dict)]
-        # จัดเรียงวันที่
-        visits = sorted(visits, key=lambda x: x.get("date") or x.get("visit_datetime") or "", reverse=True)
-    else:
-        # ถ้าดึงข้อมูลไม่ได้ หรือได้เป็น String มา ให้แสดงแจ้งเตือน
-        if isinstance(raw_data, str):
-            st.warning(raw_data)
-        visits = []
-
-    if not visits and not isinstance(raw_data, str):
-        st.write("📭 ไม่พบประวัติการรักษาในระบบค่ะ")
-
-    for visit in visits:
-        # ใช้ปุ่มเป็นตัวแทนของการ์ดไปเลย กดปุ๊บเข้าแชทปั๊บ (ผู้สูงอายุจะได้ไม่ต้องเล็งหาปุ่มเล็กๆ)
-        button_label = f"📅 {visit.get('date', '-')} | 🤒 {visit.get('symptom', '-')}"
-        
-        if st.button(button_label, key=f"btn_{visit['visit_id']}", use_container_width=True):
-            st.session_state.selected_visit = visit
-            st.session_state.messages = [] 
-            st.rerun()
-        st.write("") # เว้นบรรทัดนิดนึงให้กดง่าย
-
-# ---------------------------
-# PAGE 2: หน้าห้องแชท
-# ---------------------------
-
-
-else:
-    visit = st.session_state.selected_visit
-
-    # ดึงข้อมูลมาเตรียมไว้
-    visit_date = visit.get('date', visit.get('visit_datetime', '-'))
-    doc_name = visit.get('doctor_name', visit.get('doctor', 'คุณหมอ'))
-    symptoms = visit.get('symptom', visit.get('symptoms', '-'))
-    diagnosis = visit.get('diagnosis', '-')
-    patient_name = visit.get('patient_name', 'คุณตา/คุณยาย')
-
-    # แปลง List เป็น Text
-    if isinstance(symptoms, list): symptoms = ", ".join(symptoms)
-    if isinstance(diagnosis, list): diagnosis = ", ".join(diagnosis)
-
-    # ฟังก์ชันสำหรับแสดง Pop-up (Modal)
-    @st.dialog("📋 รายละเอียดการรักษาฉบับเต็ม")
-    def show_full_info_dialog(data):
-        st.markdown(
-            f"""
-            <p style="font-size: 24px; color: #1F2937; line-height: 1.6;">
-                <b>📅 วันที่:</b> {visit_date}<br><br>
-                <b>👨‍⚕️ แพทย์ผู้ตรวจ:</b><br>{doc_name}<br><br>
-                <b>🤒 อาการที่แจ้ง:</b><br>{symptoms}<br><br>
-                <b>🩺 สรุปผลวินิจฉัย:</b><br>{diagnosis}
-            </p>
-            <hr>
-            <p style="font-size: 16px; color: #6B7280;">ข้อมูลดิบในระบบ (Raw Data):</p>
-            """, 
-            unsafe_allow_html=True
-        )
-        st.json(data)
-        
-        st.markdown("<br>", unsafe_allow_html=True)
-        # ปุ่มปิดใหญ่ๆ เด่นๆ สีแดง
-        if st.button("❌ กดตรงนี้เพื่อปิดหน้าต่าง", use_container_width=True):
-            st.rerun()
-
-    # ==========================================
-    # ส่วนหัว: ปุ่มย้อนกลับ (ซ้าย) และ ปุ่มดูข้อมูล (ขวา)
-    # ==========================================
-    col1, col_space, col2 = st.columns([3, 2, 5])
-    
-    with col1:
-        if st.button("⬅️ ย้อนกลับ", use_container_width=True):
-            st.session_state.selected_visit = None
-            st.rerun()
-
-    with col2:
-        if st.button("🔎 ดูข้อมูลฉบับเต็ม", use_container_width=True):
-            show_full_info_dialog(visit)
-        
-        button_label = "❌ ปิดข้อมูล" if st.session_state.show_full_info else "📋 ข้อมูลฉบับเต็ม"
-        if st.button(button_label, use_container_width=True):
-            st.session_state.show_full_info = not st.session_state.show_full_info
-            st.rerun()
-
-    # ==========================================
-    # ส่วนแสดงข้อมูลฉบับเต็ม (โชว์เมื่อกดปุ่มขวาบน)
-    # ==========================================
-    if st.session_state.show_full_info:
-        st.markdown(
-            f"""
-            <div style="background-color: #F4F6F8; padding: 20px; border-radius: 10px; margin-bottom: 20px; border: 2px solid #D1D5DB;">
-                <h4 style="margin-top: 0; color: #1F2937;">🗂️ ข้อมูลการรักษา (สำหรับลูกหลาน/แพทย์)</h4>
-                <p style="font-size: 20px; color: #374151; line-height: 1.6;">
-                    <b>📅 วันที่ไปหาหมอ:</b> {visit_date}<br>
-                    <b>🤒 อาการเบื้องต้น:</b> {symptoms}<br>
-                    <b>🩺 การวินิจฉัยโรค:</b> {diagnosis}<br>
-                    <b>👨‍⚕️ แพทย์ผู้ตรวจ:</b> {doc_name}
-                </p>
-                <hr style="border-color: #D1D5DB;">
-                <p style="font-size: 16px; color: #6B7280; margin-bottom: 10px;">ข้อมูลดิบทั้งหมดจากระบบ (Raw Data):</p>
-            </div>
-            """,
-            unsafe_allow_html=True
-        )
-        st.json(visit) # โชว์ข้อมูลดิบต่อท้าย
-        st.markdown("---")
-
-    # ==========================================
-    # 1. กล่องข้อความแจ้งเตือน (System Event) กลางจอ
-    # ==========================================
+    # --- ส่วน Logo กลางหน้า ---
     st.markdown(
-        f"""
-        <style>
-        .system-event {{
-            text-align: center;
-            margin: 10px 0px 30px 0px;
-        }}
-        .system-event span {{
-            background-color: #8c969f;
-            color: white;
-            font-size: 16px;
-            padding: 8px 20px;
-            border-radius: 20px;
-            display: inline-block;
-            box-shadow: 0px 2px 5px rgba(0,0,0,0.1);
-        }}
-        .danger-box {{
-            background-color: #FFF0F0;
-            border-left: 8px solid #FF3B30;
-            border-radius: 10px;
-            padding: 20px;
-            margin-bottom: 25px;
-            box-shadow: 0px 4px 10px rgba(255, 59, 48, 0.2);
-        }}
-        .danger-title {{
-            color: #FF3B30;
-            font-size: 26px;
-            font-weight: bold;
-            margin-bottom: 10px;
-        }}
-        .danger-text {{
-            font-size: 22px;
-            color: #333;
-            line-height: 1.5;
-        }}
-        </style>
-        <div class="system-event">
-            <span>📅 {visit_date} | 👨‍⚕️ {doc_name} | 🤒 {symptoms} | 🩺 {diagnosis}</span>
+        """
+        <div class="logo-container">
+            <img src="https://cdn-icons-png.flaticon.com/512/3063/3063176.png" class="logo-img">
+            <div class="brand-name">HMS PORTAL</div>
         </div>
-        """,
+        """, 
         unsafe_allow_html=True
     )
-
-    # 🚨 2. กล่องเตือนภัย "โป้งๆ เท่าฝาบ้าน" (ถ้ามี)
-    warning_symp = visit.get("warning_symptoms", [])
-    restrictions = visit.get("activity_restriction", []) + visit.get("diet_restriction", [])
     
-    if warning_symp or restrictions:
-        danger_content = ""
-        if warning_symp:
-            warn_text = ", ".join(warning_symp) if isinstance(warning_symp, list) else warning_symp
-            danger_content += f"<li><b>อาการฉุกเฉิน (ต้องรีบไป รพ.):</b> {warn_text}</li>"
-        if restrictions:
-            rest_text = ", ".join(restrictions) if isinstance(restrictions, list) else restrictions
-            danger_content += f"<li><b>ข้อห้ามเด็ดขาด:</b> {rest_text}</li>"
-
-        st.markdown(
-            f"""
-            <div class="danger-box">
-                <div class="danger-title">🚨 ข้อควรระวังด่วน!</div>
-                <ul class="danger-text">
-                    {danger_content}
-                </ul>
+    st.markdown("<p style='text-align: center; color: #8E8E93; margin-top: -10px; margin-bottom: 30px;'>ระบบช่วยจัดการข้อมูลการรักษา AI</p>", unsafe_allow_html=True)
+    
+    raw_data = get_visits()
+    if isinstance(raw_data, list):
+        for visit in sorted(raw_data, key=lambda x: x.get("date", ""), reverse=True):
+            # วาด UI Card
+            st.markdown(f"""
+            <div class="visit-card">
+                <div class="card-header">
+                    <div class="card-date">📅 {visit.get('date', '-')}</div>
+                </div>
+                <div class="card-symptom">{visit.get('symptom', '-')}</div>
+                <div class="doctor-info">
+                    🧑‍⚕️ {visit.get('doctor_name', 'ไม่ระบุชื่อหมอ')}
+                </div>
             </div>
-            """,
-            unsafe_allow_html=True
-        )
+            """, unsafe_allow_html=True)
+            
+            # ปุ่มกดที่อยู่ติดกับ Card
+            if st.button(f"ปรึกษา AI สำหรับอาการนี้ →", key=f"v_{visit['visit_id']}", use_container_width=True):
+                st.session_state.selected_visit = visit
+                st.session_state.messages = [] 
+                st.rerun()
 
-    # ==========================================
-    # 3. พื้นที่แชท
-    # ==========================================
-    if len(st.session_state.messages) == 0:
-        greeting_msg = f"สวัสดีค่ะ คุณ{patient_name} ต้องการสอบถามข้อมูลใดเกี่ยวกับการรักษาวันนี้คะ"
-        st.session_state.messages.append({"role": "assistant", "content": greeting_msg})
+# ---------------------------
+# PAGE 2: หน้าห้องแชท (AI Chat)
+# ---------------------------
+else:
+    visit = st.session_state.selected_visit
+    
+    # Header สไตล์แอป
+    st.markdown(f"""
+        <div class="chat-header">
+            <div style="font-size: 14px; color: #8E8E93;">กำลังปรึกษาอาการ</div>
+            <div style="font-size: 20px; font-weight: bold;">{visit.get('symptom')}</div>
+        </div>
+    """, unsafe_allow_html=True)
+
+    # ปุ่มย้อนกลับแบบเนียนๆ
+    if st.button("❮ ย้อนกลับ", key="back_btn"):
+        st.session_state.selected_visit = None
+        st.rerun()
+
+    # แสดงข้อควรระวัง (ถ้ามี)
+    warn_text = visit.get("warning_symptoms")
+    if warn_text:
+        st.markdown(f"""
+            <div class="danger-box">
+                <b>🚨 ข้อควรระวังด่วน!</b><br>
+                รีบไป รพ. ทันทีหากมีอาการ: {", ".join(warn_text) if isinstance(warn_text, list) else warn_text}
+            </div>
+        """, unsafe_allow_html=True)
+
+    # วนลูปแสดงข้อความแชท
+    if not st.session_state.messages:
+        st.session_state.messages.append({"role": "assistant", "content": f"สวัสดีค่ะ มีคำถามเกี่ยวกับการรักษาในวันที่ {visit.get('date')} ไหมคะ?"})
 
     for msg in st.session_state.messages:
         with st.chat_message(msg["role"]):
-            st.markdown(f"<p style='font-size: 22px;'>{msg['content']}</p>", unsafe_allow_html=True)
+            st.markdown(msg["content"])
 
-    question = st.chat_input("พิมพ์คำถามที่สงสัยตรงนี้ได้เลยค่ะ...")
-
-    if question:
+    # ช่องกรอกคำถาม
+    if question := st.chat_input("พิมพ์คำถามของคุณที่นี่..."):
         st.session_state.messages.append({"role": "user", "content": question})
         with st.chat_message("user"):
-            st.markdown(f"<p style='font-size: 22px;'>{question}</p>", unsafe_allow_html=True)
-
-        answer = send_question(visit["visit_id"], question)
+            st.markdown(question)
         
-        st.session_state.messages.append({"role": "assistant", "content": answer})
-        with st.chat_message("assistant"):
-            st.markdown(f"<p style='font-size: 22px;'>{answer}</p>", unsafe_allow_html=True)
-            
+        with st.spinner('พยาบาล AI กำลังพิมพ์...'):
+            answer = send_question(visit["visit_id"], question)
+            st.session_state.messages.append({"role": "assistant", "content": answer})
+        st.rerun()

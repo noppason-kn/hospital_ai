@@ -1,0 +1,29 @@
+version: '3.8'
+
+services:
+  # 1. ห้องของพยาบาล AI (FastAPI)
+  backend_api:
+    build: . # สร้างจาก Dockerfile ของนาย
+    container_name: hospital_api
+    ports:
+      - "8080:8080"
+    environment:
+      # ส่ง URL ของ MLflow ให้ API รู้จัก (อ้างอิงชื่อ service ได้เลย)
+      - MLFLOW_TRACKING_URI=http://mlflow_server:5000
+      - MONGODB_URI=${MONGODB_URI} # ดึงค่าจากไฟล์ .env ของนายมาใช้
+      # ... ตัวแปรอื่นๆ ที่จำเป็น เช่น API KEY
+    depends_on:
+      - mlflow_server # รอให้ MLflow ตื่นก่อน ค่อยรัน API
+
+  # 2. ห้องของระบบ MLflow (Tracking Server)
+  mlflow_server:
+    image: python:3.10-slim # ใช้ Python เบาๆ
+    container_name: hospital_mlflow
+    ports:
+      - "5000:5000"
+    volumes:
+      # ผูกโฟลเดอร์ในเครื่องนาย กับใน Docker เพื่อไม่ให้ข้อมูล Prompt หายตอนปิดเครื่อง
+      - ./mlruns:/mlruns 
+    command: >
+      bash -c "pip install mlflow && 
+      mlflow server --host 0.0.0.0 --port 5000 --backend-store-uri sqlite:///mlruns/mlflow.db --default-artifact-root ./mlruns"
