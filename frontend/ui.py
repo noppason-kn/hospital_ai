@@ -126,6 +126,8 @@ if st.session_state.selected_visit is None:
 # ---------------------------
 # PAGE 2: หน้าห้องแชท
 # ---------------------------
+
+
 else:
     visit = st.session_state.selected_visit
 

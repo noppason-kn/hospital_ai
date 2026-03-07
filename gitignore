@@ -34,3 +34,5 @@ docker-compose.override.yml
 # --- ข้อมูลจิปาถะ ---
 # ถ้า note.txt เป็นบันทึกส่วนตัวที่ไม่อยากให้ใครเห็น (หรืออาจารย์เห็น) ก็ ignore ได้
 note.txt
+
+private_key.json
