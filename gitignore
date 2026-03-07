@@ -1,33 +1,36 @@
-# --- Private & Secrets ---
+# --- ความปลอดภัย (Sensitive Data) ---
+# ห้ามเอาไฟล์ที่เก็บ API KEY หรือรหัสผ่านขึ้นเด็ดขาด
 .env
-secret.json
-*.key
 
-# --- Python & Environments ---
-__pycache__/
-*.py[cod]
-*$py.class
+# --- Python & Environment ---
+# ไม่เอา Virtual Environment ขึ้น (คนอื่นต้องสร้างเองจาก requirements.txt)
 .venv/
 venv/
 env/
-build/
-dist/
+# ไม่เอาไฟล์คอมไพล์ของ Python ขึ้น
+__pycache__/
+*.py[cod]
+*$py.class
 
-# --- Database & Storage ---
-# ถ้าใช้ MongoDB Local แบบ Docker ไม่ต้องเอาไฟล์ข้อมูลขึ้น
-data/db/
-*.sqlite
-*.db
-
-# --- MLflow & Experiments ---
-# สำคัญ! ปกติเราจะไม่เอา mlflow artifacts ขึ้น Git เพราะมันใหญ่มาก
-# เราจะให้คนอื่นรันโค้ดเพื่อสร้างใหม่เอง หรือต่อ Database แยก
+# --- MLflow & MLOps Tracking ---
+# สำคัญ! ข้อมูลการทดลอง Prompt ใน MLflow จะถูกเก็บในโฟลเดอร์นี้ ซึ่งใหญ่มาก
 mlruns/
+# หากใช้ SQLite เป็น Backend สำหรับ MLflow
 mlflow.db
+# ไม่เอาผลลัพธ์การเทสหรือโมเดลที่บันทึกไว้ออกมา
 .artifacts/
 
-# --- IDE & OS ---
+# --- IDE & OS (ไฟล์เฉพาะเครื่องของคุณ) ---
 .vscode/
 .idea/
 .DS_Store
 Thumbs.db
+
+# --- Docker ---
+# ปกติไม่ต้อง Ignore Dockerfile แต่ถ้ามีไฟล์ log ของ docker ให้ ignore ไว้
+*.log
+docker-compose.override.yml
+
+# --- ข้อมูลจิปาถะ ---
+# ถ้า note.txt เป็นบันทึกส่วนตัวที่ไม่อยากให้ใครเห็น (หรืออาจารย์เห็น) ก็ ignore ได้
+note.txt
