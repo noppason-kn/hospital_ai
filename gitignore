@@ -1,0 +1,33 @@
+# --- Private & Secrets ---
+.env
+secret.json
+*.key
+
+# --- Python & Environments ---
+__pycache__/
+*.py[cod]
+*$py.class
+.venv/
+venv/
+env/
+build/
+dist/
+
+# --- Database & Storage ---
+# ถ้าใช้ MongoDB Local แบบ Docker ไม่ต้องเอาไฟล์ข้อมูลขึ้น
+data/db/
+*.sqlite
+*.db
+
+# --- MLflow & Experiments ---
+# สำคัญ! ปกติเราจะไม่เอา mlflow artifacts ขึ้น Git เพราะมันใหญ่มาก
+# เราจะให้คนอื่นรันโค้ดเพื่อสร้างใหม่เอง หรือต่อ Database แยก
+mlruns/
+mlflow.db
+.artifacts/
+
+# --- IDE & OS ---
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db

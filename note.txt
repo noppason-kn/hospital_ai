@@ -1,0 +1,7 @@
+project/
+│
+├── app.py          (FastAPI backend)
+├── rag.py          (RAG logic)
+├── db.py           (MongoDB connection)
+├── requirements.txt
+├── Dockerfile
