@@ -4,106 +4,53 @@ import mlflow.genai
 from openai import OpenAI
 from dotenv import load_dotenv
 
-# โหลดค่าจากไฟล์ .env
 load_dotenv()
 
-# 1. ตั้งค่า URI (ปรับพอร์ตเป็น 5001 หากคุณทำตามขั้นตอนหลบพอร์ตชนใน GCP ก่อนหน้า)
-# หากคุณใช้พอร์ต 5000 เดิมใน Docker ก็ไม่ต้องแก้ไขตรงนี้ครับ
-DEFAULT_MLFLOW_URI = "http://mlflow:5000" if os.getenv("DOCKER_ENV") else "http://127.0.0.1:5000"
-MLFLOW_URI = os.getenv("MLFLOW_TRACKING_URI", DEFAULT_MLFLOW_URI)
-PROMPT_NAME = "health_assistant_prompt"
-
+# ตั้งค่า URI เชื่อมต่อ MLflow ภายใน Docker
+MLFLOW_URI = os.getenv("MLFLOW_TRACKING_URI", "http://mlflow:5000")
 mlflow.set_tracking_uri(MLFLOW_URI)
+PROMPT_NAME = "health_assistant_prompt"
 
 client = OpenAI(
     api_key=os.getenv("GROQ_API_KEY"),
     base_url=os.getenv("GROQ_BASE_URL")
 )
 
-# ข้อมูลสำหรับทดสอบความแม่นยำ (ประหยัด Token)
-eval_data = [
-    {
-        "visit_summary": "ผู้ป่วย: คุณตาบุญมี, ยา: ยาหยอดตา (หยอดตาข้างซ้าย 1 หยด วันละ 4 ครั้ง), ยาแก้ปวด (ทานครั้งละ 1 เม็ด หลังอาหาร)",
-        "question": "ยาขวดเล็กๆ นี่ต้องกินยังไงนะ?",
-        "ground_truth": "ห้ามรับประทานเด็ดขาด! ใช้สำหรับหยอดตาเท่านั้น"
-    }
-]
+def format_visit_data(visit):
+    if not visit: return "ไม่พบข้อมูล"
+    sex = visit.get("sex", "ไม่ระบุ")
+    display_role = "คุณตา" if "ชาย" in sex else "คุณยาย" if "หญิง" in sex else "ผู้ป่วย"
+    meds = visit.get("medications", [])
+    meds_list = []
+    for m in meds:
+        if isinstance(m, dict):
+            meds_list.append(f"- {m.get('name')}: {m.get('dosage_instruction')}")
+    return f"สถานะ: {display_role}\nรายการยา:\n" + "\n".join(meds_list)
 
-def evaluate_current_prompt(template):
-    """ฟังก์ชันทดสอบความแม่นยำแบบประหยัด Token"""
-    correct_count = 0
-    for item in eval_data:
-        # 🟢 แก้ไขจุดนี้: ใช้ .replace แทน .format เพราะใน Prompt ใช้ {{ }} 
-        # เพื่อป้องกัน Python สับสนกับโครงสร้าง Dictionary
-        prompt = template.replace("{{ visit_summary }}", item["visit_summary"]).replace("{{ question }}", item["question"])
-        
-        try:
-            response = client.chat.completions.create(
-                model="llama-3.3-70b-versatile",
-                messages=[{"role": "user", "content": prompt}],
-                temperature=0
-            )
-            answer = response.choices[0].message.content.strip()
-            # เช็คความถูกต้องเบื้องต้น
-            is_correct = any(word in answer for word in ["หยอด", "ห้ามรับประทาน", "ห้ามกิน"])
-            if is_correct: correct_count += 1
-        except Exception as e:
-            print(f"⚠️ Error ระหว่างทดสอบ AI: {e}")
-            
-    return (correct_count / len(eval_data)) * 100
-
-def run_quick_registration():
-    """บันทึก Best Prompt ลง MLflow ทันที"""
-    
-    best_known_prompt = """คุณคือผู้ช่วยเตือนสุขภาพที่คอยดูแลและให้คำปรึกษาผู้สูงอายุด้วยความใส่ใจ เป็นกันเอง และอุ่นใจเหมือนลูกหลาน
-
-=== 🛡️ กฎเหล็กด้านความปลอดภัยและการตอบคำถาม (CRITICAL RULES) ===
-1. อ้างอิงจาก "ข้อมูลการรักษา (Context)" เท่านั้น ห้ามเดา แนะนำยา หรือใช้ความรู้ทางการแพทย์ภายนอกเด็ดขาด
-2. ตอบสั้น กระชับ ตรงประเด็น (ไม่เกิน 3-4 บรรทัด) เพื่อให้ผู้สูงอายุอ่านง่าย
-3. 🚨 กฎการใช้ยา (CRITICAL SAFETY): ตรวจสอบฟิลด์ `dosage_instruction` ก่อนตอบเสมอ และใช้คำกริยาให้ถูกต้อง:
-   - ยาเม็ด/ยาน้ำกิน -> ใช้คำว่า "ทาน" หรือ "รับประทาน"
-   - ยาทาภายนอก -> ใช้คำว่า "ทา"
-   - ยาหยอดตา/น้ำตาเทียม -> ใช้คำว่า "หยอด"
-   ห้ามบอกให้ผู้ป่วย "ทาน" ยาหยอดตาเด็ดขาด!
-4. การจัดการเหตุฉุกเฉิน: หากอาการตรงกับ "อาการเตือน (warning_symptoms)" ให้เน้นย้ำไปโรงพยาบาลทันที
-5. ข้อมูลที่ไม่มี: หากถามเรื่องที่ไม่มี ให้ตอบอย่างสุภาพว่าไม่มีข้อมูลในรอบนี้
-6. สรรพนามและน้ำเสียง: ใช้คำว่า "คุณตา", "คุณยาย", "นะคะ", "ค่ะ" ลงท้ายเสมอ
-
-=== 📝 ตัวอย่างการตอบคำถาม (Few-Shot Examples) ===
-คำถาม: ตาต้องทานยาตัวไหนบ้างลูก
-ข้อมูลยา: {{name: "Artificial Tears", dosage_instruction: "หยอดตาทั้งสองข้าง..."}}
-คำตอบ: ไม่มีแบบทานนะคะคุณตา จะมีเป็นยา "หยอดตา" ชื่อน้ำตาเทียมค่ะ ให้หยอดตาทั้งสองข้าง ครั้งละ 1-2 หยด หรือวันละ 4 ครั้งนะคะ
-
-=== 📂 ข้อมูลการรักษา (Context) ===
-{{ visit_summary }}
-
-=== 💬 คำถามจากผู้ป่วย ===
-{{ question }}
-
-=== 🧠 Chain-of-Thought ===
-(คิดเงียบๆ ก่อนตอบ: ตรวจสอบความถูกต้องของคำกริยา และเช็กอาการฉุกเฉิน ห้ามใช้คำว่ากินกับยาหยอดตา)
-คำตอบ:"""
-
-    print(f"🚀 กำลังเชื่อมต่อกับ MLflow ที่: {MLFLOW_URI}")
+def generate_answer(visit_data, question):
+    """ฟังก์ชันที่ใช้ตอบคำถาม โดยรองรับ Prompt แบบปีกกาคู่ {{ }} """
+    visit_summary = format_visit_data(visit_data)
     
     try:
-        with mlflow.start_run(run_name="Manual_Best_Prompt_Registration"):
-            # รันประเมินแค่รอบเดียว
-            accuracy = evaluate_current_prompt(best_known_prompt)
-            print(f"📊 Accuracy Check: {accuracy}%")
-            
-            mlflow.log_metric("accuracy", accuracy)
-            
-            # 💾 บันทึกลง Registry
-            mlflow.genai.log_prompt(
-                prompt=best_known_prompt,
-                base_model="llama-3.3-70b-versatile",
-                name=PROMPT_NAME
-            )
-            print(f"✨ บันทึก Prompt ลง MLflow Registry เรียบร้อย: {PROMPT_NAME}")
+        # 1. ดึง Prompt จาก MLflow
+        prompt_obj = mlflow.genai.load_prompt(f"prompts:/{PROMPT_NAME}/latest")
+        raw_template = prompt_obj.template
+        
+        # 2. 🟢 แก้ไข: ใช้ .replace แทน .format เพื่อให้รองรับ {{ }} ที่นายเซฟไว้
+        final_prompt = raw_template.replace("{{ visit_summary }}", visit_summary).replace("{{ question }}", question)
+        print("✅ ใช้ Prompt จาก MLflow สำเร็จ")
     except Exception as e:
-        print(f"❌ ไม่สามารถเชื่อมต่อ MLflow ได้: {e}")
-        print("คำแนะนำ: ตรวจสอบว่า Docker 'mlflow_server' รันอยู่และเข้าหน้าเว็บ 5000/5001 ได้ปกติ")
+        # Fallback กรณี MLflow ยังไม่มีข้อมูล
+        print(f"⚠️ MLflow Error: {e}")
+        final_prompt = f"ข้อมูลคนไข้: {visit_summary}\nคำถาม: {question}\nกรุณาตอบเป็นภาษาไทยอย่างสุภาพ:"
 
-if __name__ == "__main__":
-    run_quick_registration()
+    # 3. ยิงไปที่ Groq API
+    response = client.chat.completions.create(
+        model="llama-3.3-70b-versatile",
+        temperature=0.1,
+        messages=[
+            {"role": "system", "content": "คุณคือพยาบาลผู้ดูแลผู้สูงอายุ ตอบคำถามตาม Context เท่านั้น"},
+            {"role": "user", "content": final_prompt}
+        ]
+    )
+    return response.choices[0].message.content.strip()
