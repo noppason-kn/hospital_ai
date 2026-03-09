@@ -1,29 +1,52 @@
 version: '3.8'
 
 services:
-  # 1. ห้องของพยาบาล AI (FastAPI)
-  backend_api:
-    build: . # สร้างจาก Dockerfile ของนาย
-    container_name: hospital_api
-    ports:
-      - "8080:8080"
-    environment:
-      # ส่ง URL ของ MLflow ให้ API รู้จัก (อ้างอิงชื่อ service ได้เลย)
-      - MLFLOW_TRACKING_URI=http://mlflow_server:5000
-      - MONGODB_URI=${MONGODB_URI} # ดึงค่าจากไฟล์ .env ของนายมาใช้
-      # ... ตัวแปรอื่นๆ ที่จำเป็น เช่น API KEY
-    depends_on:
-      - mlflow_server # รอให้ MLflow ตื่นก่อน ค่อยรัน API
-
-  # 2. ห้องของระบบ MLflow (Tracking Server)
-  mlflow_server:
-    image: python:3.10-slim # ใช้ Python เบาๆ
-    container_name: hospital_mlflow
+  # 📊 MLflow Tracking Server (เก็บบันทึกการทดลองและ Prompt)
+  mlflow:
+    image: ghcr.io/mlflow/mlflow:latest
+    container_name: mlflow_server
     ports:
       - "5000:5000"
-    volumes:
-      # ผูกโฟลเดอร์ในเครื่องนาย กับใน Docker เพื่อไม่ให้ข้อมูล Prompt หายตอนปิดเครื่อง
-      - ./mlruns:/mlruns 
     command: >
-      bash -c "pip install mlflow && 
-      mlflow server --host 0.0.0.0 --port 5000 --backend-store-uri sqlite:///mlruns/mlflow.db --default-artifact-root ./mlruns"
+      mlflow server 
+      --backend-store-uri sqlite:////app/mlflow.db 
+      --default-artifact-root /app/artifacts 
+      --host 0.0.0.0
+    volumes:
+      # 🟢 สำคัญ: บรรทัดนี้ทำให้ข้อมูลการทดลองและเวอร์ชัน Prompt ไม่หายแม้จะรันใหม่
+      - ./mlflow_data:/app
+    restart: always
+
+  # 🌐 Backend: FastAPI (คุยกับ MongoDB Cloud และ MLflow)
+  backend-api:
+    build: .
+    container_name: health_backend
+    ports:
+      - "8080:8080"
+    env_file: .env
+    depends_on:
+      - mlflow
+    restart: always
+
+  # 🔔 Notifier: ระบบแจ้งเตือนพยาบาลผ่าน LINE (Prefect Daily Flow)
+  notifier:
+    build: .
+    container_name: health_notifier
+    # 🟢 Override คำสั่ง CMD เพื่อให้รันระบบแจ้งเตือนโดยเฉพาะ
+    command: ["python", "daily_reminder.py"]
+    env_file: .env
+    depends_on:
+      - backend-api
+    restart: always
+
+  # 🎨 Frontend: หน้าเว็บ Streamlit สำหรับให้พยาบาลใช้งาน
+  frontend:
+    build: .
+    container_name: health_frontend
+    ports:
+      - "8501:8501"
+    command: ["streamlit", "run", "frontend/ui.py", "--server.port=8501", "--server.address=0.0.0.0"]
+    env_file: .env
+    depends_on:
+      - backend-api
+    restart: always

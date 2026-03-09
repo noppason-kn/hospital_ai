@@ -1,19 +1,50 @@
 import os
+import mlflow
+import mlflow.genai
 from openai import OpenAI
 from dotenv import load_dotenv
 
+# โหลดค่าจากไฟล์ .env
 load_dotenv()
 
+# ตั้งค่า Client สำหรับเชื่อมต่อกับ Groq API
 client = OpenAI(
     api_key=os.getenv("GROQ_API_KEY"),
     base_url=os.getenv("GROQ_BASE_URL")
 )
 
+# 1. การตั้งค่าเชื่อมต่อกับ MLflow Server
+# ตรวจสอบให้แน่ใจว่า MLflow server กำลังรันอยู่ที่พอร์ต 5000
+mlflow.set_tracking_uri("http://127.0.0.1:5000")
+
+# 2. โหลด Prompt ที่ดีที่สุดจาก MLflow Registry
+# เปลี่ยนเลข '11' เป็นเลขเวอร์ชันล่าสุดที่คุณรันได้ Accuracy 100%
+try:
+    best_prompt = mlflow.genai.load_prompt('prompts:/health_assistant_prompt/11')
+except Exception as e:
+    print(f"⚠️ ไม่สามารถโหลด Prompt จาก MLflow ได้: {e}")
+    # กรณีโหลดไม่ได้ ให้ใช้ Template สำรอง (Fallback)
+    best_prompt = None
+
 def format_visit_data(visit):
-    # 1. จัดการเรื่องข้อมูลยา (ดึงตัวเลขมื้อยามาฝังไว้ในข้อความเพื่อให้ AI คำนวณ)
+    """
+    ฟังก์ชันสำหรับแปลงข้อมูลจาก Database เป็นข้อความสรุป (Summary)
+    พร้อมทำการลบข้อมูลส่วนบุคคล (Privacy Scrubbing)
+    """
+    
+    # --- มาตรการความเป็นส่วนตัว (Privacy Scrubbing) ---
+    # 1. เปลี่ยนชื่อจริงเป็นสรรพนามตามเพศ
+    sex = visit.get("sex", "ไม่ระบุ")
+    if "ชาย" in sex or sex == "ผู้ชาย":
+        display_role = "คุณตา"
+    elif "หญิง" in sex or sex == "ผู้หญิง":
+        display_role = "คุณยาย"
+    else:
+        display_role = "ผู้ป่วย"
+
+    # 2. จัดการข้อมูลยา (คำนวณวันยาหมดเบื้องต้นให้ AI)
     medications_text = ""
     meds = visit.get("medications", [])
-    
     if not isinstance(meds, list):
         meds = [meds] if meds else []
 
@@ -23,13 +54,11 @@ def format_visit_data(visit):
             common = med.get("common_name", "ยา")
             dosage = med.get("dosage_instruction", "ไม่ระบุวิธีใช้")
             
-            # --- ดึงตัวเลขมาเตรียมให้ AI ---
+            # ดึงตัวเลขมาฝังเพื่อให้ AI ช่วยคำนวณวันยาหมด
             total = med.get("total_amount", 0)
-            # รวมเม็ดที่กินต่อวัน
             daily = (med.get("morning", 0) + med.get("afternoon", 0) + 
                      med.get("evening", 0) + med.get("before_bed", 0))
             
-            # ฝังข้อมูลลับไว้หลังชื่อยา ( AI จะเห็นและเอาไปหารเลขเอง )
             medications_text += f"- {common} ({name}) : {dosage} [คงเหลือ: {total} เม็ด, ทานวันละ: {daily} เม็ด]\n"
         else:
             medications_text += f"- {med}\n"
@@ -43,94 +72,61 @@ def format_visit_data(visit):
     bp = vitals.get("blood_pressure", "-")
     temp = vitals.get("temperature", "-")
     
-    # 2. ประกอบร่างเป็น Summary (โครงสร้างเดิมเป๊ะ)
+    # 3. ประกอบร่างเป็นสรุปข้อมูล (ตัด HN และชื่อแพทย์ออกเพื่อความเป็นส่วนตัว)
     summary = f"""
-ชื่อผู้ป่วย: {visit.get("patient_name", "ไม่ทราบชื่อ")} (อายุ {visit.get("age", "-")} ปี)
-รหัสประจำตัวผู้ป่วย (HN): {visit.get("hn", "-")}
+สถานะผู้ป่วย: {display_role} (อายุ {visit.get("age", "-")} ปี)
 วันที่พบแพทย์: {visit.get("visit_datetime", visit.get("date", "ไม่ระบุวันที่"))}
-แพทย์ผู้ตรวจ: {visit.get("doctor_name", "-")} ({visit.get("department", "-")})
-สัญญาณชีพ: ความดันโลหิต {bp}, อุณหภูมิร่างกาย {temp}
+แผนกที่เข้ารับการรักษา: {visit.get("department", "-")}
+สัญญาณชีพพื้นฐาน: ความดันโลหิต {bp}, อุณหภูมิร่างกาย {temp}
 
 อาการที่มาพบแพทย์: {safe_join(visit.get("symptoms", visit.get("symptom")))}
-การวินิจฉัยโรค: {safe_join(visit.get("diagnosis"))}
+การวินิจฉัยของแพทย์: {safe_join(visit.get("diagnosis"))}
 
-ยาและวิธีใช้:
-{medications_text if medications_text.strip() else "- ไม่มีข้อมูลยา"}
+รายการยาและวิธีใช้:
+{medications_text if medications_text.strip() else "- ไม่มีข้อมูลยาในรอบนี้"}
 
-คำแนะนำแพทย์: {safe_join(visit.get("doctor_advice"))}
-ข้อห้ามกิจกรรม: {safe_join(visit.get("activity_restriction"))}
-ข้อห้ามอาหาร: {safe_join(visit.get("diet_restriction"))}
-อาการเตือนที่ต้องรีบมาพบแพทย์ (ฉุกเฉิน): {safe_join(visit.get("warning_symptoms"))}
-วันนัดครั้งถัดไป: {visit.get("follow_up_date", "ไม่มีการนัด")}
+คำแนะนำเพิ่มเติมจากแพทย์: {safe_join(visit.get("doctor_advice"))}
+ข้อห้าม/ข้อควรระวังเรื่องกิจกรรม: {safe_join(visit.get("activity_restriction"))}
+ข้อห้าม/ข้อควรระวังเรื่องอาหาร: {safe_join(visit.get("diet_restriction"))}
+อาการเตือนฉุกเฉินที่ต้องรีบมาโรงพยาบาล: {safe_join(visit.get("warning_symptoms"))}
+วันนัดหมายครั้งถัดไป: {visit.get("follow_up_date", "ไม่มีการนัดหมาย")}
 """
     return summary
 
 def generate_answer(visit_data, question):
+    """
+    ฟังก์ชันหลักในการสร้างคำตอบโดยใช้ RAG และ Prompt จาก MLflow
+    """
+    # เตรียมข้อมูล Context ที่ถูก Scrub ข้อมูลส่วนตัวแล้ว
     visit_summary = format_visit_data(visit_data)
 
-    # 3. Prompt กฎเหล็ก (เพิ่มข้อ 3 เรื่องการคำนวณยา)
-    prompt = f"""
-คุณคือ "HappyAir" พยาบาลวิชาชีพ (Telemedicine) ที่คอยดูแลและให้คำปรึกษาผู้สูงอายุด้วยความใส่ใจ เป็นกันเอง และอุ่นใจเหมือนลูกหลาน
+    # ตรวจสอบว่าโหลด Prompt จาก MLflow สำเร็จหรือไม่
+    if best_prompt:
+        # แทนค่าลงในเทมเพลตที่ดึงมาจาก MLflow
+        final_prompt = best_prompt.format(visit_summary=visit_summary, question=question)
+    else:
+        # กรณีฉุกเฉินถ้า MLflow ล่ม ให้ใช้ String เปล่าๆ หรือ Template พื้นฐาน
+        final_prompt = f"Context: {visit_summary}\nQuestion: {question}"
 
-=== 🛡️ กฎเหล็กด้านความปลอดภัยและการตอบคำถาม (CRITICAL RULES) ===
-1. อ้างอิงจาก "ข้อมูลการรักษา (Context)" เท่านั้น ห้ามเดา แนะนำยา หรือใช้ความรู้ทางการแพทย์ภายนอกเด็ดขาด
-2. ตอบสั้น กระชับ ตรงประเด็น (ไม่เกิน 3-4 บรรทัด) เพื่อให้ผู้สูงอายุอ่านง่าย ไม่ลายตา
-3. 🚨 กฎการใช้ยา (CRITICAL SAFETY): ตรวจสอบฟิลด์ `dosage_instruction` ก่อนตอบเสมอ และใช้คำกริยาให้ถูกต้อง:
-   - ยาเม็ด/ยาน้ำกิน -> ใช้คำว่า "ทาน" หรือ "รับประทาน"
-   - ยาทาภายนอก (เจล, ครีม) -> ใช้คำว่า "ทา"
-   - ยาหยอดตา/น้ำตาเทียม -> ใช้คำว่า "หยอด"
-   ห้ามบอกให้ผู้ป่วย "ทาน" ยาหยอดตา หรือ "ทาน" ยาทาเด็ดขาด!
-4. การจัดการเหตุฉุกเฉิน: หากอาการที่ถามตรงกับ "อาการเตือน (warning_symptoms)" ให้เน้นย้ำและแนะนำให้รีบมาโรงพยาบาลทันที
-5. ข้อมูลที่ไม่มี: หากถามเรื่องที่ไม่มีในข้อมูลการรักษา ให้ตอบอย่างสุภาพว่าไม่มีข้อมูลในรอบนี้
-6. สรรพนาม: ผู้ป่วยมักเรียกตัวเองว่า "ตา", "ยาย", "ลุง", "ป้า" ให้เข้าใจว่าหมายถึงตัวผู้ป่วย ห้ามแปลเป็นอวัยวะ (เช่น "ตา" ไม่ใช่ลูกตาเสมอไป)
-7. น้ำเสียง: ลงท้ายด้วย "ค่ะ" หรือ "นะคะ" เสมอ ห้ามตอบห้วนๆ
-
-=== 📝 ตัวอย่างการตอบคำถาม (Few-Shot Examples) ===
-[ตัวอย่าง 1: ถามเรื่องยา (ระวังคำกริยา)]
-คำถาม: ตาต้องทานยาตัวไหนบ้างลูก
-ข้อมูลยา: {{name: "Artificial Tears", dosage_instruction: "หยอดตาทั้งสองข้าง..."}}
-คำตอบ: ในประวัติรอบนี้ไม่มีแบบทานนะคะคุณตา จะมีเป็นยา "หยอดตา" ชื่อน้ำตาเทียมค่ะ ให้หยอดตาทั้งสองข้าง ครั้งละ 1-2 หยด เมื่อมีอาการตาแห้ง หรือวันละ 4 ครั้งนะคะ
-
-[ตัวอย่าง 2: อาการฉุกเฉิน]
-คำถาม: ยายปวดหัวรุนแรง แขนขาไม่ค่อยมีแรงเลย
-ข้อมูลอาการเตือน: ["ปวดศีรษะรุนแรง", "แขนขาอ่อนแรง"]
-คำตอบ: อาการปวดศีรษะรุนแรงและแขนขาอ่อนแรง เป็นอาการเตือนที่อันตรายมากตามที่คุณหมอระบุไว้ค่ะ แนะนำให้คุณยายรีบให้ลูกหลานพามาห้องฉุกเฉินที่โรงพยาบาลทันทีเลยนะคะ!
-
-[ตัวอย่าง 3: ข้อมูลที่มีบริบทเชื่อมโยง]
-คำถาม: ยายกินทุเรียนได้ไหมลูก
-ข้อมูลคำแนะนำ: ["งดของหวาน", "งดผลไม้รสหวานจัด"]
-คำตอบ: ในใบสั่งยาคุณหมอมีคำแนะนำให้ "งดผลไม้รสหวานจัด" นะคะคุณยาย ทุเรียนมีความหวานสูง แนะนำให้อดใจเลี่ยงไปก่อนจะปลอดภัยที่สุดค่ะ
-
-=== 📂 ข้อมูลการรักษาของคนไข้รอบนี้ (Context) ===
-{visit_summary}
-
-=== 💬 คำถามจากผู้ป่วย ===
-{question}
-
-=== 🧠 กระบวนการคิดของคุณ (Chain-of-Thought & Self-Critique) ===
-(คิดตามขั้นตอนเหล่านี้เงียบๆ เพื่อให้ได้คำตอบที่สมบูรณ์แบบ)
-1. Decompose (แยกส่วน): ผู้ป่วยถามเรื่องอะไร? (ยา / อาการ / ข้อห้าม)
-2. Retrieve (ค้นหา): ข้อมูลใน Context มีประโยคไหนที่ตอบคำถามนี้ได้เป๊ะๆ?
-3. Safety Check (ตรวจสอบความปลอดภัยอย่างเข้มงวด):
-   - ถ้ายา: กริยาที่ใช้ (ทาน/ทา/หยอด) ถูกต้องตรงกับประเภทยาใช่ไหม?
-   - ถ้าอาการ: ตรงกับ Warning Symptoms หรือไม่?
-4. Draft (ร่างคำตอบ): ร่างคำตอบสั้นๆ เป็นภาษาที่เป็นกันเอง
-5. Critique (วิพากษ์ตัวเองอย่างเข้มงวด): 
-   - ข้อผิดพลาดทางตรรกะ: เราเผลอแนะนำให้ "กิน" ยาทาหรือเปล่า?
-   - ความสั้น: สั้นพอไหม? (ไม่เกิน 3-4 บรรทัด)
-   - น้ำเสียง: มี "ค่ะ/นะคะ" ครบไหม?
-   - การหลอนข้อมูล (Hallucination): ข้อมูลนี้มีใน Context จริงๆ ใช่ไหม ไม่ได้แต่งเติมเองนะ?
-6. Final Output: เมื่อผ่านการตรวจตัวเองแล้ว พิมพ์เฉพาะคำตอบสุดท้ายลงด้านล่างนี้
-
-คำตอบ:
-"""
-
+    # เรียกใช้งาน LLM ผ่าน Groq
     response = client.chat.completions.create(
         model="llama-3.3-70b-versatile",
-        temperature=0.1,  
+        temperature=0.1,  # ตั้งค่าต่ำเพื่อให้ตอบตามข้อเท็จจริง
         messages=[
-            {"role": "system", "content": "คุณคือพยาบาลระบบ Telemedicine ที่ตอบคำถามและคำนวณวันยาหมดได้อย่างแม่นยำ"},
-            {"role": "user", "content": prompt}
+            {"role": "system", "content": "คุณคือผู้ช่วยสุขภาพระบบ Telemedicine ที่มีความเชี่ยวชาญและสุภาพ"},
+            {"role": "user", "content": final_prompt}
         ]
     )
-    return response.choices[0].message.content
+    
+    raw_answer = response.choices[0].message.content.strip()
+    
+    # การล้างข้อมูลคำตอบ (Post-processing)
+    # หาก AI มีการเขียนกระบวนการคิด (CoT) ให้ตัดออกแสดงเฉพาะส่วนคำตอบสุดท้าย
+    if "คำตอบ:" in raw_answer:
+        final_answer = raw_answer.split("คำตอบ:")[-1].strip()
+    elif "Final Output:" in raw_answer:
+        final_answer = raw_answer.split("Final Output:")[-1].strip()
+    else:
+        final_answer = raw_answer
+        
+    return final_answer
