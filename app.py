@@ -24,37 +24,6 @@ class MedicationSyncRequest(BaseModel):
     patient_name: Optional[str] = "คุณตา/คุณยาย"
     follow_up_date: Optional[str] = "ไม่มีการนัด"
 
-# --- [แก้จุดที่ 2] Helper แปลงวันที่เป็นภาษาไทยแบบบ้านๆ ---
-# def get_thai_month(date_obj):
-#     months = [
-#         "มกราคม", "กุมภาพันธ์", "มีนาคม", "เมษายน", "พฤษภาคม", "มิถุนายน",
-#         "กรกฎาคม", "สิงหาคม", "กันยายน", "ตุลาคม", "พฤศจิกายน", "ธันวาคม"
-#     ]
-#     day = date_obj.day
-#     month = months[date_obj.month - 1]
-#     year = date_obj.year + 543 # แปลงเป็น พ.ศ.
-#     return f"{day} {month} {year}"
-
-# def calculate_min_end_date(visit_date_str, medications):
-#     try:
-#         date_part = visit_date_str.split('T')[0]
-#         start_date = datetime.strptime(date_part, "%Y-%m-%d")
-#         end_dates = []
-#         for med in medications:
-#             daily_dose = (med.get("morning", 0) + med.get("afternoon", 0) + 
-#                           med.get("evening", 0) + med.get("before_bed", 0))
-#             if daily_dose > 0:
-#                 total_qty = med.get("total_amount", 0)
-#                 days_duration = total_qty / daily_dose
-#                 end_dates.append(start_date + timedelta(days=days_duration))
-#         return min(end_dates) if end_dates else start_date
-#     except Exception as e:
-#         print(f"Calc Error: {e}")
-#         return datetime.now()
-
-# -------------------------
-# ROUTES
-# -------------------------
 
 @app.get("/")
 def home():

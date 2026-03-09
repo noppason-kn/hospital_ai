@@ -1,19 +1,19 @@
 version: '3.8'
 
 services:
-  # 📊 MLflow Tracking Server (เก็บบันทึกการทดลองและ Prompt)
+  # 📊 MLflow Tracking Server
   mlflow:
     image: ghcr.io/mlflow/mlflow:latest
     container_name: mlflow_server
     ports:
-      - "5000:5000"
+      # 🟢 เข้าดูผ่าน Browser เครื่องเราที่ localhost:5001
+      - "5001:5000"
     command: >
       mlflow server 
       --backend-store-uri sqlite:////app/mlflow.db 
       --default-artifact-root /app/artifacts 
       --host 0.0.0.0
     volumes:
-      # 🟢 สำคัญ: บรรทัดนี้ทำให้ข้อมูลการทดลองและเวอร์ชัน Prompt ไม่หายแม้จะรันใหม่
       - ./mlflow_data:/app
     restart: always
 
@@ -24,22 +24,29 @@ services:
     ports:
       - "8080:8080"
     env_file: .env
+    environment:
+      # 🟢 สำคัญ: บอกให้ Backend วิ่งไปหา MLflow ผ่านชื่อ Service
+      - MLFLOW_TRACKING_URI=http://mlflow:5000
+      - DOCKER_ENV=true
     depends_on:
       - mlflow
     restart: always
 
-  # 🔔 Notifier: ระบบแจ้งเตือนพยาบาลผ่าน LINE (Prefect Daily Flow)
+  # 🔔 Notifier: ระบบแจ้งเตือนพยาบาลผ่าน LINE
   notifier:
     build: .
     container_name: health_notifier
-    # 🟢 Override คำสั่ง CMD เพื่อให้รันระบบแจ้งเตือนโดยเฉพาะ
     command: ["python", "daily_reminder.py"]
     env_file: .env
+    environment:
+      # 🟢 สำคัญ: Notifier ก็ต้องคุยกับ MLflow เหมือนกัน
+      - MLFLOW_TRACKING_URI=http://mlflow:5000
+      - DOCKER_ENV=true
     depends_on:
       - backend-api
     restart: always
 
-  # 🎨 Frontend: หน้าเว็บ Streamlit สำหรับให้พยาบาลใช้งาน
+  # 🎨 Frontend: หน้าเว็บ Streamlit
   frontend:
     build: .
     container_name: health_frontend
@@ -49,4 +56,8 @@ services:
     env_file: .env
     depends_on:
       - backend-api
+    environment:
+      # 🟢 สำคัญ: บอกให้ Frontend วิ่งไปหา Backend ผ่านชื่อ Service
+      - BACKEND_URL=http://backend-api:8080
     restart: always
+

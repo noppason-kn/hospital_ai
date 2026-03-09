@@ -6,7 +6,7 @@ import streamlit as st
 import requests
 from backend.helper import format_thai_date
 
-API_URL = "http://localhost:8000"
+API_URL = os.getenv("BACKEND_URL", "http://localhost:8080")
 
 # ตั้งค่าหน้าจอ
 st.set_page_config(page_title="ผู้ช่วยเตือนสุขภาพ", layout="centered")
