@@ -1,5 +1,4 @@
 services:
-  # 📊 MLflow Tracking Server
   mlflow:
     image: ghcr.io/mlflow/mlflow:latest
     container_name: mlflow_server
@@ -14,7 +13,6 @@ services:
       - ./mlflow_data:/app
     restart: always
 
-  # 🌐 Backend: FastAPI
   backend-api:
     build: .
     container_name: health_backend
@@ -24,26 +22,23 @@ services:
     environment:
       - MLFLOW_TRACKING_URI=http://mlflow:5000
       - DOCKER_ENV=true
-      - PYTHONUNBUFFERED=1
     depends_on:
       - mlflow
     restart: always
 
-  # 🔔 Notifier: ระบบแจ้งเตือน LINE
   notifier:
     build: .
     container_name: health_notifier
-    working_dir: /app
+    # 🟢 เพิ่มการรอเป็น 30 วิ เพื่อให้ Server ตัวจริงตื่นเต็มที่ก่อนเริ่มรัน Python
     command: >
       bash -c "
       prefect server start --host 0.0.0.0 --port 4200 &
-      sleep 15 &&
+      sleep 30 &&
       python daily_reminder.py
       "
-    ports:
-      - "4200:4200"
     env_file: .env
     environment:
+      - MLFLOW_TRACKING_URI=http://mlflow:5000
       - PREFECT_API_URL=http://127.0.0.1:4200/api
       - PREFECT_HOME=/root/.prefect
       - PYTHONUNBUFFERED=1
@@ -55,7 +50,6 @@ services:
       - backend-api
     restart: always
 
-  # 🎨 Frontend: Streamlit
   frontend:
     build: .
     container_name: health_frontend
@@ -63,13 +57,11 @@ services:
       - "8501:8501"
     command: ["streamlit", "run", "frontend/ui.py", "--server.port=8501", "--server.address=0.0.0.0"]
     env_file: .env
-    depends_on:
-      - backend-api
     environment:
       - BACKEND_URL=http://backend-api:8080
-      - PYTHONUNBUFFERED=1
+    depends_on:
+      - backend-api
     restart: always
 
-# 🟢 ประกาศ Volume ให้ถูกต้อง (ต้องชิดซ้ายสุด)
 volumes:
   prefect_storage:
