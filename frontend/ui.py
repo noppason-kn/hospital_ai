@@ -219,7 +219,6 @@ def show_full_record(v):
         time_display = f" เวลา {appointment_time} น." if appointment_time and appointment_time != '-' else " (ยังไม่ระบุเวลา)"
         st.markdown(f"📅 **วันนัดถัดไป:** {thai_follow_up}{time_display}")
 
-
 if "selected_visit" not in st.session_state: st.session_state.selected_visit = None
 if "messages" not in st.session_state: st.session_state.messages = []
 
