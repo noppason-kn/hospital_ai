@@ -80,7 +80,7 @@ def send_daily_notifications():
             msg += f"{diag_label}: กินได้ถึงวันที่: {end_date_thai} หมอนัดวันที่: {follow_up_display}\n"
 
         # 3. ส่วนท้าย (Footer)
-        msg += "\nใกล้หมดแล้วอย่าลืมเตรียมตัวไปหาหมอนะคะ ผู้ช่วยเป็นห่วงค่ะ"
+        msg += "\nใกล้หมดแล้วอย่าลืมเตรียมตัวไปหาหมอนะคะ พยาบาลเป็นห่วงค่ะ"
         
         try:
             notifier.send_push(msg)
