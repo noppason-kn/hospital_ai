@@ -68,13 +68,7 @@ services:
     container_name: health_frontend
     ports:
       - "8501:8501"
-    command: >
-      streamlit run front/ui.py 
-      --server.port=8501 
-      --server.address=0.0.0.0 
-      --server.enableCORS=false 
-      --server.enableXsrfProtection=false 
-      --server.headless=true
+    command: ["streamlit", "run", "frontend/ui.py", "--server.port=8501", "--server.address=0.0.0.0"]
     env_file: .env
     depends_on:
       - backend-api
