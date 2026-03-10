@@ -31,23 +31,23 @@ services:
 
   # 🔔 Notifier: ระบบแจ้งเตือน LINE
   notifier:
-    build: 
-      context: .
-      dockerfile: Dockerfile
+    build: .
     container_name: health_notifier
-    command: ["python", "daily_reminder.py"]
+    working_dir: /app
+    command: >
+      bash -c "
+      prefect server start --host 0.0.0.0 --port 4200 &
+      sleep 15 &&
+      python daily_reminder.py
+      "
+    ports:
+      - "4200:4200"
     env_file: .env
     environment:
-      - MLFLOW_TRACKING_URI=http://mlflow:5000
-      - DOCKER_ENV=true
-      - PYTHONUNBUFFERED=1
-      # 🟢 บังคับใช้โหมด Server ถาวรเพื่อแก้คำเตือน Ephemeral
-      - PREFECT_SERVER_ALLOW_SCHEDULED_RUNS=true
-      - PREFECT_API_SERVICES_SCHEDULER_ENABLED=true
-      # 🟢 ไม่ระบุ PREFECT_API_URL เพื่อให้มันใช้ Internal Server ตัวเองได้เสถียรกว่าใน Docker
-      # 🟢 แก้ไขปัญหา Database Locked ด้วยการเพิ่ม Timeout เป็น 60 วินาที
-      - PREFECT_API_DATABASE_CONNECTION_URL=sqlite+aiosqlite:////root/.prefect/prefect.db?timeout=60
+      - PREFECT_API_URL=http://127.0.0.1:4200/api
       - PREFECT_HOME=/root/.prefect
+      - PYTHONUNBUFFERED=1
+      - TZ=Asia/Bangkok
     volumes:
       - .:/app
       - prefect_storage:/root/.prefect
