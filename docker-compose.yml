@@ -34,14 +34,23 @@ services:
 
   # 🔔 Notifier: ระบบแจ้งเตือนพยาบาลผ่าน LINE
   notifier:
-    build: .
+    build: 
+      context: .
+      dockerfile: Dockerfile
     container_name: health_notifier
     command: ["python", "daily_reminder.py"]
     env_file: .env
     environment:
-      # 🟢 สำคัญ: Notifier ก็ต้องคุยกับ MLflow เหมือนกัน
       - MLFLOW_TRACKING_URI=http://mlflow:5000
       - DOCKER_ENV=true
+      # 🟢 แก้ไขปัญหา Ephemeral Server: อนุญาตให้รันตารางเวลาบนเซิร์ฟเวอร์เดี่ยว
+      - PREFECT_SERVER_ALLOW_SCHEDULED_RUNS=true
+      # 🟢 บังคับให้ใช้ SQLite ในไฟล์จริง (ไม่ใช้ RAM) เพื่อป้องกัน Timeout
+      - PREFECT_API_DATABASE_CONNECTION_URL=sqlite+aiosqlite:////app/prefect.db
+    volumes:
+      - .:/app
+      # 🟢 เมาท์ Volume เพื่อเก็บฐานข้อมูล Prefect ไม่ให้หายเวลา Restart
+      - prefect_storage:/root/.prefect
     depends_on:
       - backend-api
     restart: always
