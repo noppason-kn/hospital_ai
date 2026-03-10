@@ -4,13 +4,14 @@ from datetime import datetime
 from prefect import flow, task
 from prefect.schedules import Cron
 
-# เพิ่ม Path สำหรับดึงโมดูลภายในโครงการ
-sys.path.append(os.abspath(os.path.join(os.path.dirname(__file__), '..')))
+# 🟢 แก้ไขจุดที่ผิด: ต้องใช้ os.path.abspath และ os.path.join
+sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 
 @task(log_prints=True)
 def send_daily_notifications():
-    """งานหลักในการตรวจสอบฐานข้อมูลและส่ง LINE"""
+    """งานหลักในการตรวจสอบฐานข้อมูลและส่งการแจ้งเตือน LINE"""
     try:
+        # โหลดโมดูลภายในโครงการ
         from db.db import db
         from backend.line_service import LineNotifier
         from backend.helper import format_thai_date
@@ -23,7 +24,7 @@ def send_daily_notifications():
     
     print(f"🚀 เริ่มกระบวนการตรวจสอบการแจ้งเตือนประจำวันที่: {today}")
     
-    # 🔍 ค้นหารายการยาที่ยังต้องทานอยู่ (ยังไม่หมดอายุ)
+    # ค้นหารายการยาที่ยังมีสถานะ 'active'
     active_records = list(db.medication_status.find({
         "status": "active",
         "end_date_raw": {"$gte": today.replace(hour=0, minute=0, second=0)}
@@ -33,7 +34,7 @@ def send_daily_notifications():
         print("📭 ไม่มีรายการแจ้งเตือนสำหรับวันนี้")
         return
 
-    # จัดกลุ่มข้อมูลตามชื่อคนไข้ (Bucket)
+    # จัดกลุ่มข้อมูลตามคนไข้
     patient_buckets = {}
     for record in active_records:
         name = record.get("patient_name", "คุณตา/คุณยาย")
@@ -41,7 +42,7 @@ def send_daily_notifications():
             patient_buckets[name] = []
         patient_buckets[name].append(record)
 
-    # วนลูปส่งข้อความหาคนไข้แต่ละคน
+    # วนลูปส่งข้อความ
     for patient_name, records in patient_buckets.items():
         msg_header = f"สวัสดีตอนเช้าค่ะคุณ {patient_name} ☀️\n"
         med_details = ""
@@ -60,24 +61,23 @@ def send_daily_notifications():
         
         try:
             notifier.send_push(final_msg)
-            print(f"✅ ส่งข้อความให้ {patient_name} เรียบร้อยแล้ว")
+            print(f"✅ ส่งข้อความให้ {patient_name} สำเร็จ")
         except Exception as e:
-            print(f"❌ ส่งข้อความให้ {patient_name} ล้มเหลว: {e}")
+            print(f"❌ ส่งล้มเหลว: {e}")
 
 @flow(name="Medication Daily Reminder Flow")
 def medication_reminder_flow():
-    """Flow หลักของ Prefect"""
+    """Flow หลักของ Prefect สำหรับระบบแจ้งเตือน"""
     send_daily_notifications()
 
 if __name__ == "__main__":
     print("-----------------------------------------")
-    print(f"🕒 เริ่มระบบแจ้งเตือน (ตั้งเวลา 09:00 น. เวลาไทย)")
+    print(f"🕒 เริ่มระบบแจ้งเตือน (Target: 09:00 น. เวลาไทย)")
     print("-----------------------------------------")
     
-    # รัน Prefect ในโหมด Serve (ไม่ต้อง Import settings มาตั้งค่าในนี้แล้ว เพราะ Docker จัดการให้แล้ว)
+    # รัน Prefect ในโหมด Serve
     medication_reminder_flow.serve(
         name="medication-reminder-prod",
         schedule=Cron("0 9 * * *", timezone="Asia/Bangkok"),
         tags=["production", "gcp-deployment"]
     )
-
