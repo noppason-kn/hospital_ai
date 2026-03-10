@@ -34,7 +34,7 @@ services:
     build: .
     container_name: health_notifier
     # 🟢 ตัวนี้แหละครับไม้ตาย! ต้องเปิด Server ทิ้งไว้ข้างหลังด้วย &
-    command: >
+    command: |
       bash -c "
       prefect server start --host 0.0.0.0 --port 4200 &
       echo '⏳ Waiting for Prefect Server...'
