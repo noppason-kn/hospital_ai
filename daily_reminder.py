@@ -122,7 +122,7 @@ if __name__ == "__main__":
         print("⏳ ระบบกำลังเข้าสู่โหมดตั้งเวลาอัตโนมัติ (จะรันทุกวันเวลา 12:10 PM BKK)...")
         medication_reminder_flow.serve(
             name="medication-reminder-prod",
-            schedule=Cron("10 12 * * *", timezone="Asia/Bangkok"), # 10 = นาที, 12 = ชั่วโมง
+            schedule=Cron("0 9 * * *", timezone="Asia/Bangkok"), # 10 = นาที, 12 = ชั่วโมง
             tags=["production", "gcp-deployment"]
         )
     except Exception as e:
