@@ -24,31 +24,37 @@ services:
     environment:
       - MLFLOW_TRACKING_URI=http://mlflow:5000
       - DOCKER_ENV=true
+      - PYTHONUNBUFFERED=1
     depends_on:
       - mlflow
     restart: always
 
-  # 🔔 Notifier: ระบบแจ้งเตือน LINE
+  # 🔔 Notifier: ระบบแจ้งเตือน LINE (เวอร์ชันที่รันผ่านชัวร์)
   notifier:
-    build: 
-      context: .
-      dockerfile: Dockerfile
+    build: .
     container_name: health_notifier
-    command: ["python", "daily_reminder.py"]
+    # 🟢 ตัวนี้แหละครับไม้ตาย! ต้องเปิด Server ทิ้งไว้ข้างหลังด้วย &
+    command: >
+      bash -c "
+      prefect server start --host 0.0.0.0 --port 4200 &
+      echo '⏳ Waiting for Prefect Server...'
+      until curl -s http://localhost:4200/api/health > /dev/null; do
+        sleep 2
+      done
+      echo '✅ Prefect Server is UP!'
+      python daily_reminder.py
+      "
+    ports:
+      - "4200:4200"
     env_file: .env
     environment:
       - MLFLOW_TRACKING_URI=http://mlflow:5000
       - DOCKER_ENV=true
-      # 🟢 บังคับให้เปิดระบบ Scheduler และตั้งค่า API ให้คงที่
-      - PREFECT_SERVER_ALLOW_SCHEDULED_RUNS=true
-      - PREFECT_API_SERVICES_SCHEDULER_ENABLED=true
-      # กำหนดพอร์ต API ให้แน่นอนเพื่อไม่ให้มันสุ่มพอร์ต (ป้องกัน Ephemeral Warning)
+      - PYTHONUNBUFFERED=1
+      - TZ=Asia/Bangkok
       - PREFECT_API_URL=http://127.0.0.1:4200/api
-      - PREFECT_SERVER_API_HOST=0.0.0.0
-      - PREFECT_SERVER_API_PORT=4200
-      # บังคับใช้ SQLite ไฟล์จริง
-      - PREFECT_API_DATABASE_CONNECTION_URL=sqlite+aiosqlite:////root/.prefect/prefect.db?timeout=30
       - PREFECT_HOME=/root/.prefect
+      - PREFECT_API_DATABASE_CONNECTION_URL=sqlite+aiosqlite:////root/.prefect/prefect.db?timeout=60
     volumes:
       - .:/app
       - prefect_storage:/root/.prefect
@@ -68,8 +74,8 @@ services:
       - backend-api
     environment:
       - BACKEND_URL=http://backend-api:8080
+      - PYTHONUNBUFFERED=1
     restart: always
 
-# 🟢 ประกาศ Volume ให้ถูกต้อง
 volumes:
   prefect_storage:
