@@ -104,19 +104,25 @@ def medication_reminder_flow():
 
 if __name__ == "__main__":
     # รอระบบพื้นฐาน (Docker/DB) ให้พร้อมรัน
-    print("⏳ กำลังเตรียมระบบ (Waiting for 15s)...")
-    time.sleep(15)
+    print("⏳ กำลังเตรียมระบบ (Waiting for 5s)...")
+    time.sleep(5) # ลดเวลารอลง จะได้เทสเร็วๆ
     
     print("-----------------------------------------")
-    print(f"🕒 เริ่มระบบแจ้งเตือน (Target: 09:00 AM BKK)")
+    print(f"🕒 โหมดทดสอบระบบแจ้งเตือน (Testing Mode)")
     print(f"📅 เวลาเครื่องปัจจุบัน (UTC): {datetime.now(timezone.utc)}")
     print("-----------------------------------------")
     
+    # 🟢 เทคนิคลับ: สั่งรันเดี๋ยวนี้เลย 1 รอบ ไม่ต้องรอเวลา! (Test Now)
+    print("🚀 [TEST] กำลังทดสอบส่ง LINE ทันที 1 รอบ เพื่อเช็กผลลัพธ์...")
+    medication_reminder_flow() 
+    print("✅ [TEST] จบการทดสอบรอบแรก\n")
+    
     try:
-        # สั่งให้ Flow เริ่มทำงานตามตารางเวลา (Cron)
+        # 🟢 หลังจากเทสเสร็จ ก็ปล่อยให้ระบบตั้งเวลาทำงานปกติตอน 12:10 PM
+        print("⏳ ระบบกำลังเข้าสู่โหมดตั้งเวลาอัตโนมัติ (จะรันทุกวันเวลา 12:10 PM BKK)...")
         medication_reminder_flow.serve(
             name="medication-reminder-prod",
-            schedule=Cron("0 0 * * *", timezone="Asia/Bangkok"),
+            schedule=Cron("10 12 * * *", timezone="Asia/Bangkok"), # 10 = นาที, 12 = ชั่วโมง
             tags=["production", "gcp-deployment"]
         )
     except Exception as e:
