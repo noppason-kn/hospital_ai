@@ -106,7 +106,7 @@ if __name__ == "__main__":
     try:
         medication_reminder_flow.serve(
             name="medication-reminder-prod",
-            schedule=Cron("0 9 * * *", timezone="Asia/Bangkok"),
+            schedule=Cron("* * * * *", timezone="Asia/Bangkok"),
             tags=["production", "gcp-deployment"]
         )
     except Exception as e:
