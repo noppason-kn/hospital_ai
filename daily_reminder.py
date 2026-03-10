@@ -15,7 +15,7 @@ if PARENT_DIR not in sys.path:
 
 @task(log_prints=True, retries=3, retry_delay_seconds=30)
 def send_daily_notifications():
-    """งานหลัก: ส่งแจ้งเตือน LINE ตามโครงสร้างที่นายกำหนด"""
+    """งานหลัก: ส่งแจ้งเตือน LINE พร้อมอิโมจิและโครงสร้างที่นายต้องการ"""
     try:
         from db.db import db
         from backend.line_service import LineNotifier
@@ -52,8 +52,8 @@ def send_daily_notifications():
         patient_buckets[name].append(record)
 
     for patient_name, records in patient_buckets.items():
-        # 1. ส่วนหัวข้อ (Greeting)
-        msg = f"สวัสดีตอนเช้าค่ะคุณ {patient_name} ☀️\n\n"
+        # 1. ส่วนหัวข้อ (Greeting) พร้อมอิโมจิ
+        msg = f"สวัสดีตอนเช้าค่ะคุณ {patient_name} ☀️\n"
         
         # 2. ส่วนรายละเอียด (Diagnosis + Med Date + Appointment Date)
         for rec in records:
@@ -76,16 +76,16 @@ def send_daily_notifications():
             # ดึงวันหมดอายุยา
             end_date_thai = format_thai_date(rec["end_date_raw"])
             
-            # ต่อสตริงตามโครงสร้างที่นายต้องการ
-            msg += f"{diag_label}: กินได้ถึงวันที่: {end_date_thai} หมอนัดวันที่: {follow_up_display}\n"
+            # ต่อสตริงตามโครงสร้างพร้อมไอคอน
+            msg += f"\n🔴 {diag_label}:\n💊 กินได้ถึงวันที่: {end_date_thai}\n📅 หมอนัดวันที่: {follow_up_display}\n"
 
         # 3. ส่วนท้าย (Footer)
-        msg += "\nใกล้หมดแล้วอย่าลืมเตรียมตัวไปหาหมอนะคะ พยาบาลเป็นห่วงค่ะ"
+        msg += "\nใกล้หมดแล้วอย่าลืมเตรียมตัวไปหาหมอนะคะ ผู้ช่วยเป็นห่วงค่ะ ✨"
         
         try:
             notifier.send_push(msg)
             print(f"✅ [LINE SUCCESS] ส่งให้ {patient_name} สำเร็จ")
-            print(f"DEBUG MSG:\n{msg}") # พิมพ์ดูใน Log เพื่อเช็คความสวยงาม
+            print(f"DEBUG MSG:\n{msg}") 
         except Exception as e:
             print(f"❌ [LINE FAILED] ส่งให้ {patient_name} พลาด: {e}")
 
@@ -94,6 +94,7 @@ def medication_reminder_flow():
     send_daily_notifications()
 
 if __name__ == "__main__":
+    # รอระบบ Docker นิ่ง
     print("⏳ กำลังเตรียมระบบ (Waiting for 15s)...")
     time.sleep(15)
     
