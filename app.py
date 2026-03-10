@@ -71,20 +71,45 @@ async def sync_medication(data: MedicationSyncRequest):
 # -------------------------
 @app.get("/visits")
 def visits():
+    """ดึงรายการประวัติการรักษาทั้งหมด พร้อมจัดรูปแบบให้หน้าจอแสดงผลง่ายๆ"""
     visits_data = get_visit()
     result = []
+    
     for visit in visits_data:
-        visit_output = visit.copy()
-        visit_output["visit_id"] = str(visit["_id"])
-        visit_output["date"] = visit.get("visit_datetime", "ไม่ระบุวันที่")
+        v = visit.copy()
         
-        symptoms = visit.get("symptoms", ["ไม่ระบุอาการ"])
-        diagnosis = visit.get("diagnosis", ["ไม่ระบุการวินิจฉัย"])
-        visit_output["symptom"] = ", ".join(symptoms) if isinstance(symptoms, list) else str(symptoms)
-        visit_output["diagnosis"] = ", ".join(diagnosis) if isinstance(diagnosis, list) else str(diagnosis)
+        # 1. จัดการเรื่อง ID ให้เป็น String
+        v["visit_id"] = str(visit["_id"])
         
-        result.append(visit_output)
-    return result
+        # 2. จัดรูปแบบวันที่รักษา (ให้หน้าหลักแสดงผลได้เลย)
+        raw_date = visit.get("visit_datetime", "-")
+        v["date_display"] = format_thai_date(raw_date)
+        
+        # 3. จัดการเรื่องอาการและการวินิจฉัย (Join List เป็น String)
+        def list_to_str(field):
+            data = visit.get(field, [])
+            if isinstance(data, list):
+                return ", ".join(data) if data else "ทั่วไป"
+            return str(data) if data else "ทั่วไป"
+
+        v["symptom_display"] = list_to_str("symptoms")
+        v["diagnosis_display"] = list_to_str("diagnosis")
+        
+        # 4. จัดการเรื่องวันนัดหมาย (เพื่อให้ UI ไม่ต้องคำนวณเอง)
+        f_date = v.get("follow_up_date")
+        f_time = v.get("follow_up_time")
+        
+        if not f_date or f_date in ["-", "ไม่มีการนัด"]:
+            v["next_appointment_clean"] = "ยังไม่มีนัดหมายใหม่ค่ะ ✨"
+        else:
+            thai_date = format_thai_date(f_date)
+            time_text = f" เวลา {f_time} น." if f_time and f_time != "-" else " (ยังไม่ระบุเวลา)"
+            v["next_appointment_clean"] = f"{thai_date}{time_text}"
+            
+        result.append(v)
+        
+    # เรียงลำดับตามวันที่ล่าสุด (ล่าสุดอยู่บน)
+    return sorted(result, key=lambda x: x.get("visit_datetime", ""), reverse=True)
 
 # -------------------------
 # CHAT

@@ -1,5 +1,5 @@
 services:
-  # 📊 MLflow Tracking Server
+  # 1. MLflow Tracking Server
   mlflow:
     image: ghcr.io/mlflow/mlflow:latest
     container_name: mlflow_server
