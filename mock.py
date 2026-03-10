@@ -55,6 +55,7 @@ data = [
         "diet_restriction": ["งดของหวาน", "งดผลไม้รสหวานจัด เช่น ทุเรียน มะม่วง"],
         "warning_symptoms": ["ปวดศีรษะรุนแรง", "ตาพร่ามัว", "ใจสั่น หน้ามืด"],
         "follow_up_date": "2026-06-01",
+        "follow_up_time": "10:00",
         "ipd_admission": {"is_admitted": False},
         # ฟิลด์ใหม่
         "medical_certificate": {"is_issued": True, "rest_days": 1, "note": "มารับการตรวจรักษาโรคเรื้อรังตามนัด"},
@@ -99,6 +100,7 @@ data = [
         "diet_restriction": ["งดน้ำเย็นและของทอดของมัน"],
         "warning_symptoms": ["เหนื่อยหอบมากขึ้น", "ไข้กลับมาสูงเกิน 38 องศา", "ริมฝีปากเขียวคล้ำ"],
         "follow_up_date": "2026-03-24",
+        "follow_up_time": "08:00",
         "ipd_admission": {
             "is_admitted": True,
             "admission_date": "2026-03-10",
@@ -138,6 +140,7 @@ data = [
         "diet_restriction": ["งดอาหารที่มีคอเลสเตอรอลสูง เช่น กะทิ ของทอด หมูสามชั้น เครื่องในสัตว์", "ลดแป้งและน้ำตาล"],
         "warning_symptoms": ["เจ็บแน่นหน้าอกร้าวไปกรามหรือแขนซ้าย (อาการโรคหัวใจ)"],
         "follow_up_date": "2026-06-18",
+        "follow_up_time": "13:00",
         "ipd_admission": {"is_admitted": False},
         # ฟิลด์ใหม่
         "medical_certificate": {"is_issued": False},
@@ -185,6 +188,7 @@ data = [
         "diet_restriction": [],
         "warning_symptoms": ["เข่าบวมแดงร้อนมากขึ้น", "มีไข้สูง", "ปวดจนทนไม่ไหวแม้กินยา"],
         "follow_up_date": "2026-03-29", # นัดดูอาการอีก 1 สัปดาห์
+        "follow_up_time": "09:00",
         "ipd_admission": {"is_admitted": False},
         # ฟิลด์ใหม่
         "medical_certificate": {"is_issued": True, "rest_days": 3, "note": "ได้รับอุบัติเหตุหกล้ม งดเดินเยอะ"},
@@ -224,6 +228,7 @@ data = [
         "diet_restriction": [],
         "warning_symptoms": ["ปวดตารุนแรง", "ตาแดงมาก", "การมองเห็นลดลงอย่างเฉียบพลัน"],
         "follow_up_date": "2026-04-20", # นัดมาเตรียมตัวผ่าตัด
+        "follow_up_time": "07:00",
         "ipd_admission": {"is_admitted": False},
         # ฟิลด์ใหม่
         "medical_certificate": {"is_issued": False},

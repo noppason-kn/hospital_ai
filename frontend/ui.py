@@ -171,7 +171,8 @@ def show_full_record(v):
         st.error(f"**🚨 อาการเตือน (รีบพบแพทย์):** {', '.join(v.get('warning_symptoms', []))}")
     
     st.divider()
-    st.markdown(f"### 📅 วันนัดหมายครั้งต่อไป: **{v.get('follow_up_date', '-')}**")
+    appointment_time = v.get('follow_up_time', '-')
+    st.markdown(f"📅 **วันนัดถัดไป:** {v.get('follow_up_date', 'ไม่มีนัดหมาย')} เวลา {appointment_time} น.")
 
 if "selected_visit" not in st.session_state: st.session_state.selected_visit = None
 if "messages" not in st.session_state: st.session_state.messages = []
