@@ -29,11 +29,10 @@ services:
       - mlflow
     restart: always
 
-  # 🔔 Notifier: ระบบแจ้งเตือน LINE (เวอร์ชันที่รันผ่านชัวร์)
+  # 🔔 Notifier
   notifier:
     build: .
     container_name: health_notifier
-    # 🟢 ตัวนี้แหละครับไม้ตาย! ต้องเปิด Server ทิ้งไว้ข้างหลังด้วย &
     command: |
       bash -c "
       prefect server start --host 0.0.0.0 --port 4200 &

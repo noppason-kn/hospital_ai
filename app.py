@@ -57,9 +57,6 @@ async def sync_medication(data: MedicationSyncRequest):
             upsert=True
         )
 
-        # ไม่ต้อง notifier.send_push แล้ว! 
-        # เก็บไว้ให้ Scheduler (Prefect) ทำงานตอน 9 โมงเช้าทีเดียว
-        
         return {"status": "success", "end_date": end_date_thai}
 
     except Exception as e:

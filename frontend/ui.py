@@ -8,6 +8,40 @@ from backend.helper import format_thai_date
 
 API_URL = os.getenv("BACKEND_URL", "http://localhost:8080")
 
+
+# Helper Function
+from datetime import datetime, timedelta
+
+def format_thai_date(date_input):
+    """
+    ฟังก์ชันเดียวจบ: รองรับทั้ง datetime object และ string วันที่
+    จัดการแปลงเป็นวันที่ไทย (พ.ศ.) + เดือนภาษาไทย
+    """
+    if not date_input or date_input == "ไม่มีการนัด":
+        return "ยังไม่มีนัดใหม่ค่ะ"
+        
+    months = [
+        "มกราคม", "กุมภาพันธ์", "มีนาคม", "เมษายน", "พฤษภาคม", "มิถุนายน",
+        "กรกฎาคม", "สิงหาคม", "กันยายน", "ตุลาคม", "พฤศจิกายน", "ธันวาคม"
+    ]
+    
+    try:
+        # 1. เช็คว่าเป็น datetime object หรือไม่
+        if isinstance(date_input, datetime):
+            dt = date_input
+        else:
+            # 2. ถ้าเป็น string ให้พยายาม parse (รองรับทั้ง ISO และ YYYY-MM-DD)
+            clean_date = str(date_input).split('T')[0]
+            dt = datetime.strptime(clean_date, "%Y-%m-%d")
+            
+        day = dt.day
+        month = months[dt.month - 1]
+        year = dt.year + 543
+        return f"{day} {month} {year}"
+    except Exception as e:
+        # ถ้าเกิด Error ให้ส่งค่าเดิมกลับไปกันพัง
+        return str(date_input)
+
 # ตั้งค่าหน้าจอ
 st.set_page_config(page_title="ผู้ช่วยเตือนสุขภาพ", layout="centered")
 
@@ -171,8 +205,20 @@ def show_full_record(v):
         st.error(f"**🚨 อาการเตือน (รีบพบแพทย์):** {', '.join(v.get('warning_symptoms', []))}")
     
     st.divider()
+    
+    # 🟢 เรียกใช้ helper function เปลี่ยนวันนัดเป็นภาษาไทย
+    raw_follow_up = v.get('follow_up_date')
+    thai_follow_up = format_thai_date(raw_follow_up)
+    
     appointment_time = v.get('follow_up_time', '-')
-    st.markdown(f"📅 **วันนัดถัดไป:** {v.get('follow_up_date', 'ไม่มีนัดหมาย')} เวลา {appointment_time} น.")
+    
+    # 🟢 เช็คว่าถ้าไม่มีนัด จะได้ไม่ต้องแสดงคำว่า "เวลา - น." ให้เกะกะ
+    if "ยังไม่มีนัด" in thai_follow_up:
+        st.markdown(f"📅 **วันนัดถัดไป:** {thai_follow_up}")
+    else:
+        time_display = f" เวลา {appointment_time} น." if appointment_time and appointment_time != '-' else " (ยังไม่ระบุเวลา)"
+        st.markdown(f"📅 **วันนัดถัดไป:** {thai_follow_up}{time_display}")
+
 
 if "selected_visit" not in st.session_state: st.session_state.selected_visit = None
 if "messages" not in st.session_state: st.session_state.messages = []
