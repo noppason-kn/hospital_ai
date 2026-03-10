@@ -1,12 +1,9 @@
-version: '3.8'
-
 services:
   # 📊 MLflow Tracking Server
   mlflow:
     image: ghcr.io/mlflow/mlflow:latest
     container_name: mlflow_server
     ports:
-      # 🟢 เข้าดูผ่าน Browser เครื่องเราที่ localhost:5001
       - "5001:5000"
     command: >
       mlflow server 
@@ -17,7 +14,7 @@ services:
       - ./mlflow_data:/app
     restart: always
 
-  # 🌐 Backend: FastAPI (คุยกับ MongoDB Cloud และ MLflow)
+  # 🌐 Backend: FastAPI
   backend-api:
     build: .
     container_name: health_backend
@@ -25,14 +22,13 @@ services:
       - "8080:8080"
     env_file: .env
     environment:
-      # 🟢 สำคัญ: บอกให้ Backend วิ่งไปหา MLflow ผ่านชื่อ Service
       - MLFLOW_TRACKING_URI=http://mlflow:5000
       - DOCKER_ENV=true
     depends_on:
       - mlflow
     restart: always
 
-  # 🔔 Notifier: ระบบแจ้งเตือนพยาบาลผ่าน LINE
+  # 🔔 Notifier: ระบบแจ้งเตือน LINE
   notifier:
     build: 
       context: .
@@ -43,19 +39,16 @@ services:
     environment:
       - MLFLOW_TRACKING_URI=http://mlflow:5000
       - DOCKER_ENV=true
-      # 🟢 แก้ไขปัญหา Ephemeral Server: อนุญาตให้รันตารางเวลาบนเซิร์ฟเวอร์เดี่ยว
       - PREFECT_SERVER_ALLOW_SCHEDULED_RUNS=true
-      # 🟢 บังคับให้ใช้ SQLite ในไฟล์จริง (ไม่ใช้ RAM) เพื่อป้องกัน Timeout
       - PREFECT_API_DATABASE_CONNECTION_URL=sqlite+aiosqlite:////app/prefect.db
     volumes:
       - .:/app
-      # 🟢 เมาท์ Volume เพื่อเก็บฐานข้อมูล Prefect ไม่ให้หายเวลา Restart
       - prefect_storage:/root/.prefect
     depends_on:
       - backend-api
     restart: always
 
-  # 🎨 Frontend: หน้าเว็บ Streamlit
+  # 🎨 Frontend: Streamlit
   frontend:
     build: .
     container_name: health_frontend
@@ -66,7 +59,9 @@ services:
     depends_on:
       - backend-api
     environment:
-      # 🟢 สำคัญ: บอกให้ Frontend วิ่งไปหา Backend ผ่านชื่อ Service
       - BACKEND_URL=http://backend-api:8080
     restart: always
 
+# 🟢 บรรทัดนี้สำคัญมาก: ต้องเริ่มที่ขอบซ้ายสุด (Root Level) ห้ามเคาะเว้นวรรคข้างหน้า
+volumes:
+  prefect_storage:
