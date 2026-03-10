@@ -15,7 +15,7 @@ if PARENT_DIR not in sys.path:
 
 @task(log_prints=True, retries=3, retry_delay_seconds=30)
 def send_daily_notifications():
-    """งานหลัก: ตรวจสอบยาและวันนัดหมาย เพื่อส่งแจ้งเตือน LINE"""
+    """งานหลัก: ส่งแจ้งเตือน LINE ตามโครงสร้างที่นายกำหนด"""
     try:
         from db.db import db
         from backend.line_service import LineNotifier
@@ -27,10 +27,10 @@ def send_daily_notifications():
     notifier = LineNotifier()
     today = datetime.now(timezone.utc)
     
-    print(f"🚀 เริ่มกระบวนการตรวจสอบข้อมูลประจำวันที่: {today.strftime('%Y-%m-%d %H:%M:%S')} (UTC)")
+    print(f"🚀 เริ่มตรวจสอบข้อมูลประจำวันที่: {today.strftime('%Y-%m-%d %H:%M:%S')} (UTC)")
     
     try:
-        # 1. ค้นหารายการยาที่ยังมีสถานะ 'active'
+        # ค้นหารายการยาที่ยังมีสถานะ 'active'
         active_records = list(db.medication_status.find({
             "status": "active",
             "end_date_raw": {"$gte": today.replace(hour=0, minute=0, second=0, microsecond=0)}
@@ -52,47 +52,42 @@ def send_daily_notifications():
         patient_buckets[name].append(record)
 
     for patient_name, records in patient_buckets.items():
-        msg_header = f"สวัสดีตอนเช้าค่ะคุณ {patient_name} ☀️\n"
-        med_details = "📋 รายการยาที่ต้องทานวันนี้:"
-        appointment_info = ""
-        warning_info = ""
+        # 1. ส่วนหัวข้อ (Greeting)
+        msg = f"สวัสดีตอนเช้าค่ะคุณ {patient_name} ☀️\n\n"
         
-        # เก็บ Visit ID ที่ประมวลผลไปแล้วเพื่อไม่ให้วันนัดซ้ำซ้อน
-        processed_visits = set()
-
+        # 2. ส่วนรายละเอียด (Diagnosis + Med Date + Appointment Date)
         for rec in records:
             visit_id = rec["visit_id"]
             visit_data = db.visits.find_one({"_id": visit_id})
             
-            # --- ส่วนของยา ---
+            # ดึงชื่อโรค/การวินิจฉัย
             diag_label = "รายการยา"
+            follow_up_display = "ไม่มีนัดหมาย"
+            
             if visit_data:
                 diag = visit_data.get("diagnosis", visit_data.get("symptoms", ["ทั่วไป"]))
                 diag_label = diag[0] if isinstance(diag, list) else diag
-            
-            end_date_thai = format_thai_date(rec["end_date_raw"])
-            med_details += f"\n🔴 {diag_label}:\n   💊 ทานถึง: {end_date_thai}"
-
-            # --- ส่วนของวันนัด (ทำครั้งเดียวต่อหนึ่งใบสั่งยา) ---
-            if visit_id not in processed_visits and visit_data:
+                
+                # ดึงวันนัดหมาย
                 follow_up = visit_data.get("follow_up_date")
                 if follow_up and follow_up != "-":
-                    appointment_info = f"\n\n📅 วันนัดครั้งถัดไป:\n📍 {follow_up}"
-                
-                # --- ส่วนของอาการเตือน ---
-                warnings = visit_data.get("warning_symptoms", [])
-                if warnings and isinstance(warnings, list):
-                    warning_info = f"\n\n⚠️ หากมีอาการ: {', '.join(warnings)} ให้รีบมาพบแพทย์ทันทีนะคะ"
-                
-                processed_visits.add(visit_id)
+                    follow_up_display = follow_up
+            
+            # ดึงวันหมดอายุยา
+            end_date_thai = format_thai_date(rec["end_date_raw"])
+            
+            # ต่อสตริงตามโครงสร้างที่นายต้องการ
+            msg += f"{diag_label}: กินได้ถึงวันที่: {end_date_thai} หมอนัดวันที่: {follow_up_display}\n"
 
-        final_msg = f"{msg_header}\n{med_details}{appointment_info}{warning_info}\n\nอย่าลืมดูแลสุขภาพนะคะ ✨"
+        # 3. ส่วนท้าย (Footer)
+        msg += "\nใกล้หมดแล้วอย่าลืมเตรียมตัวไปหาหมอนะคะ ผู้ช่วยเป็นห่วงค่ะ"
         
         try:
-            notifier.send_push(final_msg)
-            print(f"✅ ส่งแจ้งเตือนพร้อมวันนัดให้ {patient_name} สำเร็จ")
+            notifier.send_push(msg)
+            print(f"✅ [LINE SUCCESS] ส่งให้ {patient_name} สำเร็จ")
+            print(f"DEBUG MSG:\n{msg}") # พิมพ์ดูใน Log เพื่อเช็คความสวยงาม
         except Exception as e:
-            print(f"❌ ส่งล้มเหลวให้ {patient_name}: {e}")
+            print(f"❌ [LINE FAILED] ส่งให้ {patient_name} พลาด: {e}")
 
 @flow(name="Medication Daily Reminder Flow")
 def medication_reminder_flow():
@@ -103,14 +98,14 @@ if __name__ == "__main__":
     time.sleep(15)
     
     print("-----------------------------------------")
-    print(f"🕒 เริ่มระบบแจ้งเตือน (Target: 09:00 น. เวลาไทย)")
+    print(f"🕒 เริ่มระบบแจ้งเตือน (Schedule: 09:00 AM BKK)")
     print(f"📅 เวลาเครื่องปัจจุบัน (UTC): {datetime.now(timezone.utc)}")
     print("-----------------------------------------")
     
     try:
         medication_reminder_flow.serve(
             name="medication-reminder-prod",
-            schedule=Cron("* * * * *", timezone="Asia/Bangkok"),
+            schedule=Cron("0 9 * * *", timezone="Asia/Bangkok"),
             tags=["production", "gcp-deployment"]
         )
     except Exception as e:
