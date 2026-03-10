@@ -1,13 +1,17 @@
 import os
 import sys
+import time
 from datetime import datetime
 from prefect import flow, task
 from prefect.schedules import Cron
 
-# 🟢 แก้ไขจุดที่ผิด: ต้องใช้ os.path.abspath และ os.path.join
-sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
+# 🟢 แก้ไข Path ให้ถูกต้องโดยใช้ os.path.abspath ผ่าน os.path.dirname
+# เพื่อให้ Python สามารถเรียกใช้โมดูลจากโฟลเดอร์อื่น (เช่น db หรือ backend) ได้
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+sys.path.append(BASE_DIR)
+sys.path.append(os.path.dirname(BASE_DIR))
 
-@task(log_prints=True)
+@task(log_prints=True, retries=3, retry_delay_seconds=20)
 def send_daily_notifications():
     """งานหลักในการตรวจสอบฐานข้อมูลและส่งการแจ้งเตือน LINE"""
     try:
@@ -22,19 +26,23 @@ def send_daily_notifications():
     notifier = LineNotifier()
     today = datetime.now()
     
-    print(f"🚀 เริ่มกระบวนการตรวจสอบการแจ้งเตือนประจำวันที่: {today}")
+    print(f"🚀 เริ่มกระบวนการตรวจสอบการแจ้งเตือนประจำวันที่: {today.strftime('%Y-%m-%d %H:%M:%S')}")
     
-    # ค้นหารายการยาที่ยังมีสถานะ 'active'
-    active_records = list(db.medication_status.find({
-        "status": "active",
-        "end_date_raw": {"$gte": today.replace(hour=0, minute=0, second=0)}
-    }))
+    # ค้นหารายการยาที่ยังมีสถานะ 'active' และวันสิ้นสุดยังไม่ถึงวันนี้
+    try:
+        active_records = list(db.medication_status.find({
+            "status": "active",
+            "end_date_raw": {"$gte": today.replace(hour=0, minute=0, second=0)}
+        }))
+    except Exception as e:
+        print(f"❌ ติดปัญหาการดึงข้อมูลจาก Database: {e}")
+        return
 
     if not active_records:
         print("📭 ไม่มีรายการแจ้งเตือนสำหรับวันนี้")
         return
 
-    # จัดกลุ่มข้อมูลตามคนไข้
+    # จัดกลุ่มข้อมูลตามคนไข้ (Bucket) เพื่อส่งข้อความเดียวต่อคน
     patient_buckets = {}
     for record in active_records:
         name = record.get("patient_name", "คุณตา/คุณยาย")
@@ -42,7 +50,7 @@ def send_daily_notifications():
             patient_buckets[name] = []
         patient_buckets[name].append(record)
 
-    # วนลูปส่งข้อความ
+    # วนลูปส่งข้อความหาคนไข้แต่ละราย
     for patient_name, records in patient_buckets.items():
         msg_header = f"สวัสดีตอนเช้าค่ะคุณ {patient_name} ☀️\n"
         med_details = ""
@@ -51,7 +59,8 @@ def send_daily_notifications():
             visit_data = db.visits.find_one({"_id": rec["visit_id"]})
             diag_label = "รายการยา"
             if visit_data:
-                diag = visit_data.get("diagnosis", visit_data.get("symptoms", "ทั่วไป"))
+                # ดึงชื่อโรคหรืออาการมาเป็นหัวข้อ
+                diag = visit_data.get("diagnosis", visit_data.get("symptoms", ["ทั่วไป"]))
                 diag_label = diag[0] if isinstance(diag, list) else diag
 
             end_date_thai = format_thai_date(rec["end_date_raw"])
@@ -63,7 +72,7 @@ def send_daily_notifications():
             notifier.send_push(final_msg)
             print(f"✅ ส่งข้อความให้ {patient_name} สำเร็จ")
         except Exception as e:
-            print(f"❌ ส่งล้มเหลว: {e}")
+            print(f"❌ ส่งล้มเหลวให้ {patient_name}: {e}")
 
 @flow(name="Medication Daily Reminder Flow")
 def medication_reminder_flow():
@@ -71,13 +80,22 @@ def medication_reminder_flow():
     send_daily_notifications()
 
 if __name__ == "__main__":
+    # 🟢 หน่วงเวลา 10 วินาทีเพื่อให้ Network และ Database ใน Docker พร้อมใช้งาน
+    print("⏳ กำลังเตรียมระบบ (Waiting for 10s)...")
+    time.sleep(10)
+    
     print("-----------------------------------------")
     print(f"🕒 เริ่มระบบแจ้งเตือน (Target: 09:00 น. เวลาไทย)")
+    print(f"📅 เวลาเครื่องปัจจุบัน (UTC): {datetime.utcnow()}")
     print("-----------------------------------------")
     
-    # รัน Prefect ในโหมด Serve
-    medication_reminder_flow.serve(
-        name="medication-reminder-prod",
-        schedule=Cron("0 9 * * *", timezone="Asia/Bangkok"),
-        tags=["production", "gcp-deployment"]
-    )
+    # รัน Prefect ในโหมด Serve เพื่อเฝ้ารอตามตารางเวลา
+    try:
+        medication_reminder_flow.serve(
+            name="medication-reminder-prod",
+            # ตั้งตารางเวลา 09:00 น. และระบุ Timezone เป็นประเทศไทย
+            schedule=Cron("0 9 * * *", timezone="Asia/Bangkok"),
+            tags=["production", "gcp-deployment"]
+        )
+    except Exception as e:
+        print(f"💥 เกิดข้อผิดพลาดร้ายแรง: {e}")
