@@ -1,4 +1,5 @@
 services:
+  # 📊 MLflow Tracking Server
   mlflow:
     image: ghcr.io/mlflow/mlflow:latest
     container_name: mlflow_server
@@ -13,6 +14,7 @@ services:
       - ./mlflow_data:/app
     restart: always
 
+  # 🌐 Backend: FastAPI
   backend-api:
     build: .
     container_name: health_backend
@@ -26,23 +28,27 @@ services:
       - mlflow
     restart: always
 
+  # 🔔 Notifier: ระบบแจ้งเตือน LINE
   notifier:
-    build: .
+    build: 
+      context: .
+      dockerfile: Dockerfile
     container_name: health_notifier
-    # 🟢 เพิ่มการรอเป็น 30 วิ เพื่อให้ Server ตัวจริงตื่นเต็มที่ก่อนเริ่มรัน Python
-    command: >
-      bash -c "
-      prefect server start --host 0.0.0.0 --port 4200 &
-      sleep 30 &&
-      python daily_reminder.py
-      "
+    command: ["python", "daily_reminder.py"]
     env_file: .env
     environment:
       - MLFLOW_TRACKING_URI=http://mlflow:5000
+      - DOCKER_ENV=true
+      # 🟢 บังคับให้เปิดระบบ Scheduler และตั้งค่า API ให้คงที่
+      - PREFECT_SERVER_ALLOW_SCHEDULED_RUNS=true
+      - PREFECT_API_SERVICES_SCHEDULER_ENABLED=true
+      # กำหนดพอร์ต API ให้แน่นอนเพื่อไม่ให้มันสุ่มพอร์ต (ป้องกัน Ephemeral Warning)
       - PREFECT_API_URL=http://127.0.0.1:4200/api
+      - PREFECT_SERVER_API_HOST=0.0.0.0
+      - PREFECT_SERVER_API_PORT=4200
+      # บังคับใช้ SQLite ไฟล์จริง
+      - PREFECT_API_DATABASE_CONNECTION_URL=sqlite+aiosqlite:////root/.prefect/prefect.db?timeout=30
       - PREFECT_HOME=/root/.prefect
-      - PYTHONUNBUFFERED=1
-      - TZ=Asia/Bangkok
     volumes:
       - .:/app
       - prefect_storage:/root/.prefect
@@ -50,6 +56,7 @@ services:
       - backend-api
     restart: always
 
+  # 🎨 Frontend: Streamlit
   frontend:
     build: .
     container_name: health_frontend
@@ -57,11 +64,12 @@ services:
       - "8501:8501"
     command: ["streamlit", "run", "frontend/ui.py", "--server.port=8501", "--server.address=0.0.0.0"]
     env_file: .env
-    environment:
-      - BACKEND_URL=http://backend-api:8080
     depends_on:
       - backend-api
+    environment:
+      - BACKEND_URL=http://backend-api:8080
     restart: always
 
+# 🟢 ประกาศ Volume ให้ถูกต้อง
 volumes:
   prefect_storage:
