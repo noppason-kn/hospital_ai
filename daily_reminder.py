@@ -118,11 +118,10 @@ if __name__ == "__main__":
     print("✅ [TEST] จบการทดสอบรอบแรก\n")
     
     try:
-        # 🟢 หลังจากเทสเสร็จ ก็ปล่อยให้ระบบตั้งเวลาทำงานปกติตอน 12:10 PM
-        print("⏳ ระบบกำลังเข้าสู่โหมดตั้งเวลาอัตโนมัติ (จะรันทุกวันเวลา 12:10 PM BKK)...")
+        print("⏳ ระบบกำลังเข้าสู่โหมดตั้งเวลาอัตโนมัติ (จะรันทุกวันเวลา 09:00 BKK)...")
         medication_reminder_flow.serve(
             name="medication-reminder-prod",
-            schedule=Cron("0 9 * * *", timezone="Asia/Bangkok"), # 10 = นาที, 12 = ชั่วโมง
+            schedule=Cron("0 9 * * *", timezone="Asia/Bangkok"),
             tags=["production", "gcp-deployment"]
         )
     except Exception as e:
